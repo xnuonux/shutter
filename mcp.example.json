@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "shutter": {
+      "command": "node",
+      "args": ["C:/dev/shutter/src/mcp.mjs"]
+    }
+  }
+}
