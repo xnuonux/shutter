@@ -1,5 +1,15 @@
 # Shutter
 
+## Current product map · September 10, 2026
+
+Start with [the product blueprint](docs/product-blueprint.md) for the complete direction and build order, and [the current checkpoint](docs/current-checkpoint.md) for implemented behaviour. The local studio now has Direct, Canvas and Edit, paid H3 Max integration, and a source-range/coverage timeline. The blueprint distinguishes these working foundations from planned general media editing, sound, Pixel orchestration and workflow execution.
+
+The next implementation milestone makes imported video and generated takes equally usable in the editor, with stable preview and explicit source replacement. No new provider or paid generation is needed for that milestone.
+
+## Original prototype notes
+
+The material below records the first local prototype. Its model, interface and export limitations describe that earlier build; consult the current checkpoint before treating them as present behaviour.
+
 A local production room for original animated stories. Keep a cast and a place, direct individual shots, preserve exact references, generate local takes and review continuity. Moment remains the quick path from one image to one directed shot.
 
 This is the first working production slice, not a finished cinema platform. The current executing adapter is Wan 2.2 TI2V 5B. MiniMax H3 Ref2VA is the intended multimodal research target; its territorial license and this machine's performance still need resolution. A first-image Wan test does not qualify multi-reference video, audio or full camera control.

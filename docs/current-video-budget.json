@@ -1,0 +1,183 @@
+{
+  "version": 6,
+  "asOf": "2026-09-10",
+  "currency": "USD",
+  "balanceBasis": "latest explicit user report; not a live account balance query",
+  "remainingAtCheckpoint": 6.2,
+  "spentSinceCheckpoint": 1.47846,
+  "reservedForSubmittedJobs": 0,
+  "available": 4.72154,
+  "allocations": {
+    "h3MaxTextToVideo": 1,
+    "h3MaxImageAndReferenceToVideo": 5,
+    "generalReserve": 0.2
+  },
+  "scope": {
+    "authorizedEndpoints": [
+      "minimax/h3-max/text-to-video",
+      "minimax/h3-max/image-to-video",
+      "minimax/h3-max/reference-to-video"
+    ],
+    "resolutions": [
+      "480P",
+      "768P"
+    ],
+    "researchCandidateOnly": [
+      "minimax/h3-max/multi-angle/image-to-video"
+    ],
+    "excludedSpend": [
+      "Director",
+      "Turbo",
+      "other providers",
+      "future commercial"
+    ],
+    "currentStep": "Console placement complete: seven selected shots, 36.1667s review cut. Dialogue continuity is next, not started."
+  },
+  "pricing": {
+    "verifiedDate": "2026-09-09",
+    "promoEnds": "2026-09-14",
+    "timezoneOfExpiry": "not established; verify live",
+    "textAndImage": {
+      "promoPerOutputSecond": {
+        "480P": 0.0125,
+        "768P": 0.02
+      },
+      "postPromoPerOutputSecond": {
+        "480P": 0.05,
+        "768P": 0.08
+      }
+    },
+    "reference": {
+      "outputPerSecond": {
+        "480P": 0.05,
+        "768P": 0.08
+      },
+      "pooledFreeTokens": 4096,
+      "overagePer1000Tokens": 0.02,
+      "imageTokens": "width * height / 1024",
+      "audioTokensPerSecondApprox": 80,
+      "videoTokensPerSecondApprox": {
+        "480P": 2886,
+        "768P": 7459.2
+      },
+      "videoTokenResolutionBasis": "output resolution, not uploaded reference resolution"
+    }
+  },
+  "plannedCeilings": {
+    "textInitial": 0.45,
+    "imageReferenceInitial": 3.18,
+    "combined": 3.63,
+    "unassignedIncludingGeneralReserve": 2.57,
+    "status": "earlier conditional research plan, not queued or spent"
+  },
+  "submissionPolicy": [
+    "recheck live pricing and exact measured input dimensions/durations",
+    "reconcile first actual charge before expanding",
+    "reserve within correct pool before submission",
+    "persist request ID; recover uncertain submission instead of duplicating",
+    "record selected state and exact references",
+    "no automatic quality rerolls",
+    "enforced by src/fal-renderer.mjs and persisted fal-study-budget-v1; this JSON is its human checkpoint"
+  ],
+  "futureCommercial": {
+    "separateFundingExpected": 10,
+    "funded": false,
+    "spendAuthorizedNow": false,
+    "brief": "future-eternities-commercial-brief.md"
+  },
+  "history": {
+    "regularH3CompletedCost": 2.4,
+    "alreadyOutsideNewBalance": true,
+    "userReportedAdditionalDirectorSpendApprox": 2,
+    "completedRequests": [
+      "01a08816-0336-7a50-9ab0-3d838b40ca62",
+      "01a0881c-6467-70b0-8ddf-d9a05a481f72",
+      "01a08823-6ed1-7ad1-96e5-6a322daada3f"
+    ]
+  },
+  "updatedAt": "2026-09-10T05:34:49.814Z",
+  "remainingPools": {
+    "text": 0.9375,
+    "imageReference": 3.58404,
+    "reserve": 0.2
+  },
+  "completedMaxRequests": [
+    {
+      "id": "01a088a7-15bb-75a2-8aac-dc91796e3ee5",
+      "jobId": "job_f0aedf5d-cb43-4717-9619-1c393b51bca0",
+      "mode": "text-to-video",
+      "state": "ready",
+      "actualUsd": 0.0625
+    },
+    {
+      "id": "01a088a9-808c-7d92-af37-9b74bc4a838a",
+      "jobId": "job_57ebd907-0d50-452a-ba72-5443340bd9b8",
+      "mode": "image-to-video",
+      "state": "ready",
+      "actualUsd": 0.0625
+    },
+    {
+      "id": "01a088ac-c224-7bb0-b15a-f947378f22c6",
+      "jobId": "job_008c2b70-1a7e-4f27-b16a-39ef42ae1891",
+      "mode": "reference-to-video",
+      "state": "ready",
+      "actualUsd": 0.25
+    },
+    {
+      "id": "01a088fc-f82a-7631-8d84-fcd0b2fbf207",
+      "jobId": "job_3905823b-1ad2-4e94-a0f5-c6d63a5129fc",
+      "mode": "reference-to-video",
+      "state": "ready",
+      "actualUsd": 0.25
+    },
+    {
+      "id": "01a088ff-1eb8-7ae0-bbb2-d309c5543087",
+      "jobId": "job_72433e8f-b555-4575-97e1-dd448ce648fe",
+      "mode": "reference-to-video",
+      "state": "ready",
+      "actualUsd": 0.25
+    },
+    {
+      "id": "01a08901-4eba-7560-b6fc-61e7b028fb9c",
+      "jobId": "job_8cc84d3f-6b78-4388-a1a2-87cacdfc0952",
+      "mode": "reference-to-video",
+      "state": "ready",
+      "actualUsd": 0.29096
+    },
+    {
+      "id": "01a0890d-6fc5-7a31-bba7-032dc0033065",
+      "jobId": "job_3f963922-530b-48aa-a956-6ed286ccd0ea",
+      "mode": "image-to-video",
+      "state": "ready",
+      "actualUsd": 0.0625
+    },
+    {
+      "id": "01a0890d-d868-7312-83e2-6e56d6b56da3",
+      "jobId": "job_5cfc3fa3-dbdc-4f0a-a8b1-f4f9d6646d09",
+      "mode": "image-to-video",
+      "state": "ready",
+      "actualUsd": 0.0625
+    },
+    {
+      "id": "01a0897d-0263-7bf2-ac2b-740ddd00f04c",
+      "jobId": "job_3b41d0cb-5955-4058-9850-7f27a7d56907",
+      "mode": "image-to-video",
+      "state": "ready",
+      "actualUsd": 0.0625
+    },
+    {
+      "id": "01a08980-9037-70f3-b56e-1de930212141",
+      "jobId": "job_ada71234-4cf0-43bd-8a7b-a2776bf36512",
+      "mode": "image-to-video",
+      "state": "ready",
+      "actualUsd": 0.0625
+    },
+    {
+      "id": "01a089cc-14b1-7ce3-af18-aa70625c9cf3",
+      "jobId": "job_56f64bc0-8895-4494-978a-1e316a5eae15",
+      "mode": "image-to-video",
+      "state": "ready",
+      "actualUsd": 0.0625
+    }
+  ]
+}

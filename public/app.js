@@ -1,5 +1,13 @@
+import {createH3UI} from "/h3-ui.js";
+import {createProductionWorkflow} from '/production-workflow.js';
+import {createNextShotUI} from '/next-shot.js';
+import {createTimelineUI} from '/timeline.js';
+import {createDirectUI} from '/direct.js';
+import {createCanvasUI} from '/canvas.js';
 const app = document.querySelector("#app");
 const icons = {
+  canvas: '<rect x="2" y="3" width="7" height="7" rx="2"/><rect x="15" y="14" width="7" height="7" rx="2"/><path d="M9 6h5a4 4 0 0 1 4 4v4"/>',
+  edit: '<path d="M3 4h18M3 12h18M3 20h18M9 2v20"/><rect x="12" y="6" width="8" height="4" rx="1"/><rect x="3" y="14" width="12" height="4" rx="1"/>',
   film: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>',
   moment: '<path d="m13 2-9 12h7l-1 8 10-13h-7z"/>',
   cast: '<circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M17 5a3 3 0 0 1 0 6M18 15a5 5 0 0 1 3 4v2"/>',
@@ -29,7 +37,7 @@ let data = {
   },
   projectId = localStorage.getItem("shutter.project"),
   shotId = localStorage.getItem("shutter.shot"),
-  view = "film",
+  view = ['film','canvas','edit','settings','moment','cast','place','stage','review','jobs','projects'].includes(location.hash.slice(1))?location.hash.slice(1):'film',
   dirty = false,
   momentAsset = null,
   busy = false,
@@ -77,6 +85,12 @@ const latest = (s) =>
     .filter((j) => j.projectId === production()?.id && j.shotId === s?.id)
     .at(-1);
 const asset = (id) => data.assets.find((a) => a.id === id);
+const h3UI=createH3UI({data:()=>data,asset,imageOptions,esc});
+const flow=createProductionWorkflow({data:()=>data,production,shot,take:()=>takeFor(shot()),esc,media});
+const nextShot=createNextShotUI({data:()=>data,production,shot,esc,media,imageOptions});
+const timelineUI=createTimelineUI({data:()=>data,production,esc,media,api,notify,refresh,markDirty:value=>{dirty=value;}});
+const directUI=createDirectUI({data:()=>data,production,shot,takeFor,esc,media,strip,empty,api,refresh,notify,go,markDirty:value=>{dirty=value;}});
+const canvasUI=createCanvasUI({data:()=>data,production,shot,esc,media,api,refresh,notify,go,selectShot,markDirty:value=>{dirty=value;}});
 const stateLabel = {
   prepared: "Prepared",
   submitting: "Submitting",
@@ -127,7 +141,10 @@ async function refresh(renderNow = true) {
       data.assets,
       data.jobs,
       data.stages,
+      data.timelines,
+      data.cuts,
       data.renderer.online,
+      data.renderer.fal,
     ]);
     const changed = signature !== stateSignature;
     stateSignature = signature;
@@ -147,6 +164,7 @@ function go(next) {
   libraryDraft = null;
   stopPlayback();
   view = next;
+  history.replaceState(null,'','#'+view);
   render();
 }
 function selectShot(id) {
@@ -164,27 +182,14 @@ function header() {
       ?.filter(
         (c) =>
           c.projectId === p?.id &&
-          c.plan.takes.length === p.shots.length &&
-          c.plan.takes.every((t, i) => t.jobId === p.shots[i].selectedTake),
+          (data.timelines?.some(t=>t.projectId===p.id)?data.timelines.some(t=>t.projectId===p.id&&t.hash===c.plan.hash):c.plan.takes.length === p.shots.length && c.plan.takes.every((t, i) => t.jobId === p.shots[i].selectedTake)),
       )
       .at(-1);
-  return `<header class="topbar"><div class="brand-line"><span class="wordmark">Shutter</span><span class="crumb">The production room</span></div><div class="top-actions"><div class="local-status"><i class="dot ${data.renderer.online ? "online" : ""}"></i>${data.renderer.online ? "Local renderer online" : "Local renderer offline"}</div>${p ? `<a class="outline-button" href="/api/export/${p.id}">Export manifest</a>${cut ? `<a class="outline-button" href="${media(cut.output)}" download>Download review cut</a>` : `<button id="export-cut" class="outline-button" ${!p.shots.length || !p.shots.every((s) => chosen(s)) ? "disabled" : ""} title="Choose a ready take for each shot first. This exporter joins matching silent takes.">Export review cut</button>`}` : ""}</div></header>`;
+  return `<header class="topbar"><div class="brand-line"><button class="project-switch" data-projects>Productions <span>/</span> <strong>${esc(p?.title||'Your studio')}</strong><span>⌄</span></button></div><div class="top-actions"><span class="saved-indicator"><i class="signal-dot"></i> Local project</span>${p?cut?`<a class="export-button" href="${media(cut.output)}" download>Export film ↗</a>`:`<button class="export-button" data-nav="edit">Open edit ↗</button>`:''}</div></header>`;
 }
 function rail() {
-  return `<aside class="rail"><div class="aperture" aria-label="Shutter">${icon("aperture")}</div>${[
-    ["film", "Production"],
-    ["moment", "Moment"],
-    ["cast", "Cast"],
-    ["place", "Places"],
-    ["stage", "Stage"],
-    ["review", "Review"],
-    ["jobs", "Renders"],
-  ]
-    .map(
-      ([id, name]) =>
-        `<button data-nav="${id}" class="${view === id ? "active" : ""}" aria-current="${view === id ? "page" : "false"}">${icon(id)}<span>${name}</span></button>`,
-    )
-    .join("")}<div class="rail-foot">Eternities<br>Local studio</div></aside>`;
+  const button=([id,name])=>`<button data-nav="${id}" class="${view===id||(view==='settings'&&id==='film')?'active':''}" aria-current="${view===id?'page':'false'}">${icon(id)}<span>${name}</span></button>`;
+  return `<aside class="rail"><button class="studio-brand" data-nav="film" aria-label="Shutter home">${icon('aperture')}<span>shutter<span class="brand-period">.</span></span></button><nav class="primary-nav" aria-label="Studio">${[['film','Direct'],['canvas','Canvas'],['edit','Edit']].map(button).join('')}</nav><div class="rail-divider"></div><div class="moment-nav">${button(['moment','Moment'])}</div><details class="library-nav" open><summary>Library & tools</summary><nav aria-label="Library and tools">${[['cast','Cast'],['place','Places'],['stage','3D stage'],['review','Continuity'],['jobs','Renders']].map(button).join('')}</nav></details><div class="rail-foot"><span class="connection-state"><i class="signal-dot"></i>${data.renderer.fal?.configured?'H3 Max connected':'Local studio'}</span>${production()?`<a href="/api/export/${production().id}">Save production file ↗</a>`:''}<span class="company-name">ETERNITIES</span></div></aside>`;
 }
 function head(title, sub, tabs = false) {
   return `<div class="production-head"><div><div class="eyeline">${esc(sub)}</div><h1>${esc(title)}</h1><div class="subtle">${production() ? `Saved on this machine · Revision ${production().revision}` : "Create on your terms"}</div></div>${tabs ? `<div class="tabs"><button class="selected" data-nav="film">Shot sequence</button><button data-nav="review">Continuity review</button><button data-projects>All productions</button></div>` : ""}</div>`;
@@ -197,7 +202,7 @@ function status(job) {
 function strip() {
   const p = production(),
     s = shot();
-  return `<section class="strip-section"><div class="strip-head"><h2>Scene 01 <span> / ${p.shots.length} shots</span></h2><span>${p.shots.reduce((sum, x) => sum + x.frames / x.fps, 0).toFixed(1)} seconds planned</span></div><div class="strip">${p.shots.map((x, i) => `<button class="shot-card ${x.id === s?.id ? "active" : ""}" data-shot="${x.id}" aria-label="Select shot ${i + 1}: ${esc(x.title)}">${x.reference ? `<img src="${media(x.reference)}" alt="Reference for ${esc(x.title)}">` : ""}<div class="card-info"><strong>${String(i + 1).padStart(2, "0")} &nbsp; ${esc(x.title)}</strong><small>${(x.frames / x.fps).toFixed(1)}s</small></div></button>`).join("")}<button class="add-shot" id="add-shot">+ Add shot</button></div></section>`;
+  return `<section class="strip-section"><div class="strip-head"><h2>Scene 01 <span> / ${p.shots.length} shots</span></h2><span>${p.shots.reduce((sum, x) => sum + x.frames / x.fps, 0).toFixed(1)} seconds planned</span></div><div class="strip">${p.shots.map((x, i) => `<button class="shot-card ${x.id === s?.id ? "active" : ""}" data-shot="${x.id}" aria-label="Select shot ${i + 1}: ${esc(x.title)}">${chosen(x)?.output?`<video src="${media(chosen(x).output)}" muted playsinline preload="metadata" aria-hidden="true"></video>`:x.reference?`<img src="${media(x.reference)}" alt="Reference for ${esc(x.title)}">`:""}<div class="card-info"><strong>${String(i + 1).padStart(2, "0")} &nbsp; ${esc(x.title)}</strong><small>${(x.frames / x.fps).toFixed(1)}s</small>${chosen(x)?flow.badge(chosen(x)):""}</div></button>`).join("")}<button class="add-shot" id="add-shot">+ Add shot</button></div></section>`;
 }
 function film() {
   const p = production(),
@@ -213,7 +218,9 @@ function film() {
     ready = !!take?.output && (!playing || playCut);
   return (
     head(p.title, p.subtitle || "Original animated short", true) +
-    `<div class="room"><section class="stage"><div class="viewer">${ready ? `<video id="take-player" src="${media(take.output)}" poster="${media(take.snapshot.shot.reference)}" controls playsinline preload="metadata"></video>` : `<img src="${media(s.reference)}" alt="${esc(s.title)} reference frame">`}<span class="frame-note">${ready ? (s.selectedTake === take.id ? "Selected video take" : "Video candidate") : "Reference frame · not rendered"} &nbsp; / &nbsp; ${String(p.shots.indexOf(s) + 1).padStart(2, "0")}</span></div><div class="viewer-footer"><div class="film-transport"><button id="play-sequence">${playing ? "Stop" : "Play " + (p.shots.every((x) => chosen(x)) ? "cut" : "boards")}</button><strong>${esc(s.title)}</strong></div><div class="shot-meta"><span>${s.width} × ${s.height}</span><span>${s.fps} fps</span><span>${(s.frames / s.fps).toFixed(2)}s</span></div></div><div class="story-state"><div><strong>Entering the shot</strong>${esc(s.before || "No starting state recorded.")}</div><div><strong>Leaving the shot</strong>${esc(s.after || "No ending state recorded.")}</div></div></section><aside class="inspector"><h2>Direct this shot</h2><p class="desc">Shape the performance. Keep the world.</p>${takePicker(s)}<form id="shot-form"><label class="field"><span>Shot title</span><input id="shot-title" value="${esc(s.title)}"></label><label class="field"><span>Action</span><textarea id="action" rows="4">${esc(s.action)}</textarea></label><label class="field"><span>Camera</span><input id="camera" value="${esc(s.camera)}"></label><div class="split-fields"><label class="field"><span>Frames at 24 fps</span><select id="frames">${[49, 97, 121, 145, 193, 241].map((n) => `<option value="${n}" ${s.frames === n ? "selected" : ""}>${(n / 24).toFixed(2)} seconds</option>`).join("")}</select></label><label class="field"><span>Variation seed</span><input id="seed" type="number" min="0" value="${s.seed}"></label></div><label class="field"><span>Shot reference</span><select id="shot-reference">${imageOptions(s.reference)}</select></label><fieldset class="cast-checks"><legend>Cast in this shot</legend>${(p.cast || []).map((c) => `<label><input type="checkbox" name="shot-cast" value="${esc(c.id)}" ${(s.cast || []).includes(c.id) ? "checked" : ""}> ${esc(c.name)}</label>`).join("")}</fieldset><div class="reference-row"><img src="${media(s.reference)}" alt="Selected reference"><div><strong>${esc(asset(s.reference)?.name || "Selected reference")}</strong><small>Exact image bound to this shot</small></div></div><button class="primary" type="submit">Save shot</button></form><button id="prepare" class="secondary" >Prepare local render</button>${job ? `<div class="reference-row"><div>${status(job)}<small>${job.state === "prepared" ? "Saved. No video submitted." : esc(job.providerId ? "Provider receipt retained" : "")}</small></div></div>${job.state === "prepared" ? `<button id="run-job" class="primary" ${!data.renderer.online ? "disabled" : ""}>Render this shot locally</button>` : ""}${job.state === "ready" ? '<button data-nav="review" class="secondary">Review this take</button>' : ""}` : ""}<p class="render-help">Wan 2.2 / ${s.width} × ${s.height}. Uses this machine. No paid provider. The reference guides the model; continuity still needs review.</p>${job?.error ? `<div class="job-error">${esc(message(job.error))}</div>` : ""}</aside></div>${strip()}`
+    flow.prep() +
+    nextShot.lineage() + nextShot.render() +
+    `<div class="room"><section class="stage"><div class="viewer">${ready ? `<video id="take-player" src="${media(take.output)}" poster="${media(take.snapshot.shot.reference)}" controls playsinline preload="metadata"></video>` : `${s.reference ? `<img src="${media(s.reference)}" alt="${esc(s.title)} reference frame">` : `<div class="empty-review"><h2>${esc(s.title)}</h2><p>A description is ready. Prepare the shot to see its estimate.</p></div>`}`}<span class="frame-note">${ready ? (s.selectedTake === take.id ? "Selected video take" : "Video candidate") : "Reference frame · not rendered"} &nbsp; / &nbsp; ${String(p.shots.indexOf(s) + 1).padStart(2, "0")}</span></div><div class="viewer-footer"><div class="film-transport"><button id="play-sequence">${playing ? "Stop" : "Play " + (p.shots.every((x) => chosen(x)) ? "cut" : "boards")}</button><strong>${esc(s.title)}</strong></div><div class="shot-meta"><span>${ready ? take.media.width : s.width} × ${ready ? take.media.height : s.height}</span><span>${ready ? take.media.fps : s.fps} fps</span><span>${(ready ? take.media.duration : s.frames / s.fps).toFixed(2)}s ${ready ? "actual" : "planned"}</span></div></div><div class="story-state"><div><strong>Entering the shot</strong>${esc(s.before || "No starting state recorded.")}</div><div><strong>Leaving the shot</strong>${esc(s.after || "No ending state recorded.")}</div></div></section><aside class="inspector"><h2>Direct this shot</h2><p class="desc">Shape the performance. Keep the world.</p>${takePicker(s)}<form id="shot-form">${h3UI.fields(s,p)}<label class="field"><span>Shot title</span><input id="shot-title" value="${esc(s.title)}"></label><label class="field"><span>Action</span><textarea id="action" rows="4">${esc(s.action)}</textarea></label><label class="field"><span>Camera</span><input id="camera" value="${esc(s.camera)}"></label><div class="split-fields"><label class="field" id="local-timing" ${s.generation ? "hidden" : ""}><span>Frames at 24 fps</span><select id="frames">${[49, 97, 121, 145, 193, 241].map((n) => `<option value="${n}" ${s.frames === n ? "selected" : ""}>${(n / 24).toFixed(2)} seconds</option>`).join("")}</select></label><label class="field"><span>Variation seed</span><input id="seed" type="number" min="0" value="${s.seed}"></label></div><label class="field"><span>Shot reference</span><select id="shot-reference"><option value="">No opening image</option>${imageOptions(s.reference)}</select></label><fieldset class="cast-checks"><legend>Cast in this shot</legend>${(p.cast || []).map((c) => `<label><input type="checkbox" name="shot-cast" value="${esc(c.id)}" ${(s.cast || []).includes(c.id) ? "checked" : ""}> ${esc(c.name)}</label>`).join("")}</fieldset><div class="reference-row">${s.reference ? `<img src="${media(s.reference)}" alt="Selected reference">` : ""}<div><strong>${esc(asset(s.reference)?.name || "Description only")}</strong><small>${s.reference ? "Exact image bound to this shot" : "No opening image supplied"}</small></div></div><button class="primary" type="submit">Save shot</button></form><button id="prepare" class="secondary" >Prepare shot and estimate</button>${job ? `<div class="reference-row"><div>${status(job)}<small>${job.state === "prepared" ? "Saved. No video submitted." : esc(job.providerId ? "Provider receipt retained" : "")}</small></div></div>${job.state === "prepared" ? `<button id="run-job" class="primary" ${job.snapshot.shot.generation ? (!data.renderer.fal?.configured || !job.quote ? "disabled" : "") : !data.renderer.online ? "disabled" : ""}>${job.quote ? "Render · reserve $" + job.quote.reservedUsd.toFixed(3) : "Render this shot locally"}</button>` : ""}${job.state === "ready" ? '<button data-nav="review" class="secondary">Review this take</button>' : ""}` : ""}${h3UI.budget(s,job)}${flow.cost(job)}${job?.error ? `<div class="job-error">${esc(message(job.error))}</div>` : ""}</aside></div>${strip()}`
   );
 }
 function empty() {
@@ -235,9 +242,10 @@ function takePicker(s) {
       j.shotId === s.id &&
       j.state === "ready",
   );
-  return takes.length
+  const reuse=data.jobs.filter(j=>j.state==='ready'&&j.output&&j.projectId!==production()?.id&&!j.sourceJobId);
+  return (takes.length
     ? `<label class="field"><span>Take selected for the cut</span><select id="selected-take"><option value="">Choose a rendered take</option>${takes.map((j, i) => `<option value="${j.id}" ${s.selectedTake === j.id ? "selected" : ""}>Take ${i + 1} · seed ${j.snapshot.shot.seed}</option>`).join("")}</select></label>`
-    : "";
+    : "")+(reuse.length?`<label class="field"><span>Reuse an existing take · no generation charge</span><select id="reuse-take"><option value="">Choose saved footage</option>${reuse.map(j=>`<option value="${j.id}">${esc(j.snapshot.title)} / ${esc(j.snapshot.shot.title)}</option>`).join('')}</select></label>`:'');
 }
 function castView() {
   const p = production();
@@ -263,8 +271,9 @@ function reviewView() {
     reference = job?.snapshot.shot || s;
   return (
     head("Continuity review", "The same people. The same world.") +
+    (s?flow.review():'') +
     (s
-      ? `<div class="review-room"><div class="compare-grid"><div><img src="${media(reference.reference)}" alt="Selected shot reference"><p class="compare-label">Reference saved with this take / ${esc(reference.title)}</p></div><div>${job?.output ? `<video src="${media(job.output)}" controls playsinline></video><p class="compare-label">Rendered take / ${esc(job.providerId)}</p>` : `<div class="empty-review"><h2>No video to review yet</h2><p>Prepare and render this shot to compare movement, face, costume and set against the reference.</p><button data-nav="film" class="outline-button">Return to shot</button></div>`}</div></div>${
+      ? `<div class="review-room"><div class="compare-grid"><div>${reference.reference?`<img src="${media(reference.reference)}" alt="Selected shot reference">`:`<div class="frame-placeholder">No opening image for this take</div>`}<p class="compare-label">Reference saved with this take / ${esc(reference.title)}</p></div><div>${job?.output ? `<video src="${media(job.output)}" controls playsinline></video><p class="compare-label">Rendered take / ${esc(job.providerId)}</p>` : `<div class="empty-review"><h2>No video to review yet</h2><p>Prepare and render this shot to compare movement, face, costume and set against the reference.</p><button data-nav="film" class="outline-button">Return to shot</button></div>`}</div></div>${
           job?.output
             ? `<form id="review-form"><div class="review-form">${[
                 "face",
@@ -310,7 +319,7 @@ function jobsView() {
             .toReversed()
             .map(
               (j) =>
-                `<article class="job-row"><div><h3>${esc(j.snapshot.title)} / ${esc(j.snapshot.shot.title)}</h3>${status(j)}<p>${j.snapshot.shot.width} × ${j.snapshot.shot.height} / ${(j.snapshot.shot.frames / 24).toFixed(2)}s / seed ${j.snapshot.shot.seed}</p><p>${esc(j.providerId ? "Local receipt " + j.providerId : "No provider submission yet.")}${j.elapsedSeconds ? " / " + Math.round(j.elapsedSeconds) + " seconds elapsed" : ""}</p>${j.error ? `<p class="job-error">${esc(message(j.error))}</p>` : ""}${j.output ? `<a href="${media(j.output)}" download>Download video take</a>` : ""}</div><button class="outline-button" data-open-job="${j.id}">Open shot</button></article>`,
+                `<article class="job-row"><div><h3>${esc(j.snapshot.title)} / ${esc(j.snapshot.shot.title)}</h3>${status(j)}${flow.badge(j)}${flow.cost(j)}<p>${j.snapshot.shot.width} × ${j.snapshot.shot.height} / ${(j.snapshot.shot.frames / 24).toFixed(2)}s / seed ${j.snapshot.shot.seed}</p><p>${esc(j.providerId ? "Provider receipt " + j.providerId : "No provider submission yet.")}${j.elapsedSeconds ? " / " + Math.round(j.elapsedSeconds) + " seconds elapsed" : ""}</p>${j.error ? `<p class="job-error">${esc(message(j.error))}</p>` : ""}${j.output ? `<a href="${media(j.output)}" download>Download video take</a>` : ""}</div><button class="outline-button" data-open-job="${j.id}">Open shot</button></article>`,
             )
             .join("")
         : '<div class="empty-review"><h2>No renders yet</h2><p>Your prepared shots and actual video results will appear here.</p></div>'
@@ -349,8 +358,12 @@ function projectsView() {
   );
 }
 function render() {
-  app.innerHTML = `<div class="app-shell">${rail()}<main class="workspace">${header()}${({ film, cast: castView, place: placeView, review: reviewView, moment: momentView, jobs: jobsView, stage: stageView, projects: projectsView }[view] || film)()}</main></div>`;
+  app.innerHTML = `<div class="app-shell">${rail()}<main class="workspace" data-view="${view}">${header()}<div class="workspace-body">${({ film:directUI.render,canvas:canvasUI.render,settings:film, edit:timelineUI.render, cast: castView, place: placeView, review: reviewView, moment: momentView, jobs: jobsView, stage: stageView, projects: projectsView }[view] || directUI.render)()}</div></main></div>`;
   wire();
+  timelineUI.wire();
+  directUI.wire();
+  canvasUI.wire();
+  if(matchMedia('(max-width:620px)').matches)document.querySelector('.library-nav')?.removeAttribute('open');
 }
 function guarded(fn) {
   return async (e) => {
@@ -385,6 +398,7 @@ async function saveShot() {
             camera: document.querySelector("#camera").value,
             frames: Number(document.querySelector("#frames").value),
             seed: Number(document.querySelector("#seed").value),
+            ...h3UI.values(p,s),
           }
         : x,
     ),
@@ -419,6 +433,7 @@ function stopPlayback() {
   clearTimeout(playTimer);
 }
 function playSequence() {
+  if(data.timelines?.some(t=>t.projectId===production()?.id)){go('edit');return;}
   if (playing) {
     stopPlayback();
     render();
@@ -458,6 +473,57 @@ function playSequence() {
   advance();
 }
 function wire() {
+  const nextForm=document.querySelector('#next-shot-form');
+  nextForm?.addEventListener('input',nextShot.remember);
+  nextForm?.addEventListener('change',nextShot.remember);
+  document.querySelector('#next-composition')?.addEventListener('change',e=>{
+    const newAngle=e.target.value==='new';document.querySelector('#next-image-field').hidden=!newAngle;document.querySelector('#next-image').required=newAngle;
+  });
+  document.querySelector('#next-load-frame')?.addEventListener('click',guarded(async()=>{
+    if(dirty)throw Error('Save the current shot before loading its ending.');
+    nextShot.remember();await api('/api/jobs/'+nextShot.source().id+'/frames');await refresh();
+    document.querySelector('.next-shot').open=true;
+  }));
+  nextForm?.addEventListener('submit',guarded(async()=>{
+    if(dirty)throw Error('Save the current shot before continuing it.');
+    nextShot.remember();const p=production(),j=nextShot.source();
+    const result=await api('/api/productions/'+p.id+'/continue-shot',{method:'POST',body:JSON.stringify({...Object.fromEntries(new FormData(nextForm)),baseRevision:p.revision,sourceJobId:j.id})});
+    nextShot.clear();shotId=result.shotId;previewJobId=null;localStorage.setItem('shutter.shot',shotId);await refresh();
+    notify('Next shot created from the saved ending. Review current conditions, then prepare its estimate. No video submitted.');
+  }));
+  document.querySelector('#review-take')?.addEventListener('change',e=>{
+    if(dirty){e.target.value=takeFor(shot())?.id;notify('Save your review notes before switching takes.');return;}
+    previewJobId=e.target.value;render();
+  });
+  document.querySelector('#decision-note')?.addEventListener('input',()=>{dirty=true;});
+  document.querySelector('#load-boundary')?.addEventListener('click',guarded(async()=>{
+    if(dirty)throw Error('Save your review note before loading comparison frames.');
+    const j=takeFor(shot()),info=flow.takeState(j);
+    await Promise.all([j.id,info?.previousJobId].filter(Boolean).map(id=>api('/api/jobs/'+id+'/frames')));
+    await refresh();notify('Actual first and last frames loaded. No generation charge.');
+  }));
+  document.querySelectorAll('[data-decision]').forEach(button=>button.addEventListener('click',guarded(async()=>{
+    if(document.querySelector('#review-form')?.dataset.changed)throw Error('Save the detailed review before making a decision.');
+    const j=takeFor(shot()),info=flow.takeState(j),note=document.querySelector('#decision-note').value;
+    await api('/api/jobs/'+j.id+'/decision',{method:'POST',body:JSON.stringify({baseRevision:production().revision,contextHash:info.contextHash,decision:button.dataset.decision,note})});
+    dirty=false;await refresh();notify(button.dataset.decision==='accepted'?'This exact take is accepted and selected for the cut.':'Revision note saved. Edit this shot; other takes remain unchanged.');
+  })));
+  document.querySelector("#generation-mode")?.addEventListener("change",e=>{
+    document.querySelector("#h3-fields").hidden=e.target.value==="local";
+    document.querySelector("#local-timing").hidden=e.target.value!=="local";
+    dirty=true;
+  });
+  document.querySelector("#shot-asset-file")?.addEventListener("change",guarded(async e=>{
+    const file=e.target.files[0];if(!file)return;
+    const imported=await api("/api/assets?name="+encodeURIComponent(file.name),{method:"POST",body:file,raw:true});
+    await refresh(false);
+    for(const select of document.querySelectorAll("#shot-form select[data-assets]")){
+      if(select.dataset.assets!==imported.kind)continue;
+      select.add(new Option(imported.name,imported.id));
+    }
+    if(imported.kind==="image")document.querySelector("#shot-reference").add(new Option(imported.name,imported.id));
+    notify("Reference imported. Select where it belongs, then save the shot.");
+  }));
   document.querySelector("#export-cut")?.addEventListener(
     "click",
     guarded(async (e) => {
@@ -570,6 +636,11 @@ function wire() {
       notify("This exact take is selected for the cut.");
     }),
   );
+  document.querySelector('#reuse-take')?.addEventListener('change',guarded(async e=>{
+    if(!e.target.value)return;if(dirty)throw Error('Save the shot before reusing footage.');
+    const p=production();await api('/api/productions/'+p.id+'/reuse-take',{method:'POST',body:JSON.stringify({baseRevision:p.revision,shotId:shot().id,sourceJobId:e.target.value})});
+    previewJobId=null;await refresh();notify('Existing footage selected. No generation charge.');
+  }));
   document
     .querySelectorAll("[data-nav]")
     .forEach((b) => (b.onclick = () => go(b.dataset.nav)));
@@ -615,7 +686,7 @@ function wire() {
         body: "{}",
       });
       await refresh();
-      notify("Render submitted to this machine.");
+      notify("Render submitted. Its receipt and budget reservation are saved.");
     }),
   );
   document
@@ -623,16 +694,20 @@ function wire() {
     ?.addEventListener("click", playSequence);
   document.querySelector("#review-form")?.addEventListener("input", () => {
     dirty = true;
+    document.querySelector('#review-form').dataset.changed='true';
   });
   document.querySelector("#review-form")?.addEventListener(
     "submit",
     guarded(async (e) => {
+      const decisionDraft=document.querySelector('#decision-note')?.value;
+      const hasDecisionDraft=decisionDraft!==undefined&&decisionDraft!==(flow.takeState(takeFor(shot()))?.lastDecision?.note||'');
       await api("/api/jobs/" + takeFor(shot()).id + "/review", {
         method: "POST",
         body: JSON.stringify(Object.fromEntries(new FormData(e.target))),
       });
       dirty = false;
       await refresh();
+      if(hasDecisionDraft&&document.querySelector('#decision-note')){document.querySelector('#decision-note').value=decisionDraft;dirty=true;}
       notify("Review saved to this exact video take.");
     }),
   );

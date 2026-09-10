@@ -1,33 +1,3 @@
-# Current checkpoint: Direct, Canvas and Edit
-
-September 10, 2026. Read studio-workspace-results.md and studio-workspace-design.md. Dom requested a beautiful, understandable studio with a connected media canvas and usable editing. Implemented the bounded redesign inline, preserving earlier work and provider choices. 41 tests pass. Browser verified direction save/reopen, real reference wire connection, keyboard/pointer layout persistence, and responsive Direct/Canvas/Edit.
-
-Production prod_ba9072b5-21f0-4973-b413-05678795ef46 is revision 20 after reversible verification saves. All original creative fields and seven selected takes are restored; same timeline revision 10 and 868-frame cut. Canvas revision 3 restores default positions. No new render jobs or paid charges: 20 jobs, zero active/unknown; tracked available $4.72154. Same existing renderer credentials; localhost4677 PID20908.
-
-Direct is an editable direction composer; no simulated Pixel chat. Canvas connects actual next-take H3 media references and persists positions, with type/limit/revision validation. It is not a general workflow executor. Edit has real footage thumbnails and responsive tracks; preview remains exact local export. Next: faster preview and explicit take replacement that preserves trims/coverage, then sound controls and scene-state timing. Claude and additional providers remain deferred. No publication, merge, cleanup or new paid study in this milestone.
-
-Task outputs/shutter/studio-workspace contains source/design notes, verification, production export and browser captures. Source recovery used the explicitly authorized old Lunari cinema path, not a migration repository warehouse. Full details and limitations in studio-workspace-results.md.
-
-## Product architecture map · September 10, 2026
-
-Dom asked to establish the full visual, functional and intuitive product picture. Read product-blueprint.md for the target, current gaps, Pixel/crew contracts and dependency-ordered milestones. This is a working blueprint for review; previous scene-time/coverage approval is preserved. Key decisions: one production across Direct/Canvas/Edit; canvas dependencies and timeline time remain distinct; media clips must not require a generation job; manual audiovisual editing and recovery precede deeper workflow/VFX expansion. Pixel uses shared typed commands and existing scoped authority. Native managed chat/providers remain deferred.
-
-Next bounded milestone M1: asset-backed source placement, an editable draft before every shot has a selected render, stable preview and explicit source/take replacement. M2 completes import/edit/mix/title/caption/export/reopen. M3/M4 establish scene memory and Pixel operation. M5/M6 are workflow/craft expansion; they are not all prerequisites for a focused commercial beta. Product map is also saved in task outputs/shutter/product-blueprint/shutter-product-blueprint.md. This architecture pass changed documentation only; no new tests, media, API calls to providers or spending. Live local state remained20jobs,0active/unknown,$4.72154 tracked available.
-
-## Historical checkpoint before the studio redesign
-
-# Current checkpoint: shared scene timeline
-
-September 10, 2026. Read timeline-foundation.md first. The approved scene-time design now has a working local editor, reversible frame ranges and coverage, main-scene audio, exact local preview/export and two MCP editing tools. 37 tests pass; browser placement/drag/trim/undo/redo/reopen checked.
-
-Dom authorizes inline continuation and reuse of useful Lunari/GitHub code; stabilize fundamentals before adding another provider. Keep Claude integration deferred. Branch codex/shared-scene-timeline contains the existing working changes plus this milestone; no publication or cleanup.
-
-Production prod_ba9072b5-21f0-4973-b413-05678795ef46 remains revision 16, seven original selected takes. Saved timeline revision 10 restores all original ranges, no coverage; 868 frames at 24 fps. Baseline cut cut_7d5bf063e5d90889bb547e2ad18f883a6a9c209a30601429d1e14ed51e606dec. Timing-test coverage cut cut_4e7771c36ffe99e4ba9dea7cfebaf75abd288310f779039b3038de943a3a3148 is retained but is not an approved creative cut or synchronization proof.
-
-No paid generation; $4.72154 remains, no active/unknown render jobs. Local studio restarted with the same existing credentials. Task outputs/shutter/timeline-foundation contains implementation notes, verification, manifest and both previews. Next: efficient preview, clearer take replacement and scene-state scheduling/actual footage review, then targeted paid continuity tests. Pixel source audit is in outputs/shutter/pixel-architecture-review.md.
-
-## Previous checkpoint
-
 # Shutter current checkpoint
 
 ## Locked directing decision: shared scene timeline and camera coverage

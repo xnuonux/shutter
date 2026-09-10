@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
+import {validateH3,h3Snapshot} from './h3-spec.mjs';
+import {compileTimeline} from './timeline.mjs';
 
 export const digest = (value) =>
   crypto.createHash("sha256").update(value).digest("hex");
@@ -75,7 +77,9 @@ export class Studio {
       .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
     const isJpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
     const isMp4 = bytes.subarray(4, 8).toString() === "ftyp";
-    const ext = isPng ? "png" : isJpeg ? "jpg" : isMp4 ? "mp4" : null;
+    const isWav=bytes.subarray(0,4).toString()==='RIFF'&&bytes.subarray(8,12).toString()==='WAVE';
+    const isMp3=bytes.subarray(0,3).toString()==='ID3'||(bytes[0]===255&&(bytes[1]&224)===224&&!isJpeg);
+    const ext = isPng ? "png" : isJpeg ? "jpg" : isMp4 ? "mp4" : isWav?'wav':isMp3?'mp3':null;
     if (!ext) throw new Error("unsupported_media");
     const sha256 = digest(bytes),
       id = "asset_" + sha256;
@@ -97,8 +101,8 @@ export class Studio {
       sha256,
       filename,
       bytes: bytes.length,
-      kind: isMp4 ? "video" : "image",
-      mime: isMp4 ? "video/mp4" : isPng ? "image/png" : "image/jpeg",
+      kind: isMp4 ? "video" : isWav||isMp3?'audio':"image",
+      mime: isMp4 ? "video/mp4" : isWav?'audio/wav':isMp3?'audio/mpeg':isPng ? "image/png" : "image/jpeg",
       name: bounded(metadata.name || filename, 200),
       origin: bounded(metadata.origin || "local import", 1000),
       createdAt: new Date().toISOString(),
@@ -146,6 +150,7 @@ export class Studio {
       throw new Error("image_required");
     const ids = new Set();
     for (const shot of input.shots) {
+      validateH3(this,shot,cast);
       if (!/^[a-zA-Z0-9_-]{1,80}$/.test(shot.id) || ids.has(shot.id))
         throw new Error("invalid_shot_identity");
       ids.add(shot.id);
@@ -228,7 +233,8 @@ export class Studio {
       throw new Error("request_key_required");
     const p = this.getProduction(projectId),
       shot = p.shots.find((s) => s.id === shotId);
-    if (!shot || !shot.reference) throw new Error("reference_required");
+    if (!shot || (!shot.reference&&!shot.generation)) throw new Error("reference_required");
+    const h3=shot.generation?h3Snapshot(this,p,shot):null;
     const refs = [
       ...new Set(
         [
@@ -250,6 +256,7 @@ export class Studio {
       shot: clone(shot),
       references: refs,
       workflow: "wan22-ti2v-5b-i2v-v1",
+      ...(h3||{}),
     };
     const hash = fingerprint(snapshot),
       key = projectId + ":" + requestKey;
@@ -328,7 +335,58 @@ export class Studio {
       },
     });
   }
+  reuseTake(projectId,baseRevision,shotId,sourceId) {
+    return this.transaction(()=>{
+      const p=this.getProduction(projectId),source=this.getJob(sourceId);
+      if(p.revision!==baseRevision)throw Error('revision_conflict');
+      const shot=p.shots.find(s=>s.id===shotId);if(!shot)throw Error('shot_not_found');
+      if(source.state!=='ready'||!source.output)throw Error('ready_take_required');
+      this.verifyAsset(source.output);
+      const job=this.write('job',{id:'job_'+crypto.randomUUID(),projectId,shotId,state:'ready',providerId:null,sourceJobId:source.id,output:source.output,media:source.media||source.snapshot.shot,review:source.review||null,createdAt:new Date().toISOString(),snapshot:{...clone(source.snapshot),workflow:'reused-take',sourceWorkflow:source.snapshot.workflow}});
+      shot.selectedTake=job.id;
+      this.write('production',{...p,revision:p.revision+1,updatedAt:new Date().toISOString()});return job;
+    });
+  }
   buildCutPlan(id) {
+    let record;
+    try {record=this.read('timeline_'+id,'timeline');}
+    catch(e){if(e.message!=='not_found')throw e;}
+    if(record)return this.timelinePlan(id,record.timeline);
+    return this.buildSelectedCutPlan(id);
+  }
+  timelinePlan(id,timeline) {
+    const plan=compileTimeline(this,id,timeline);
+    return {...plan,hash:fingerprint(plan)};
+  }
+  getTimeline(id) {
+    let record;
+    try {record=this.read('timeline_'+id,'timeline');}
+    catch(e){
+      if(e.message!=='not_found')throw e;
+      const plan=this.buildSelectedCutPlan(id);
+      record={id:'timeline_'+id,projectId:id,revision:0,timeline:{fps:plan.fps,
+        main:plan.takes.map((t,i)=>({id:'main_'+i,jobId:t.jobId,sourceIn:0,sourceOut:t.frames})),coverage:[]},past:[],future:[]};
+    }
+    return {...record,plan:this.timelinePlan(id,record.timeline)};
+  }
+  saveTimeline(id,baseRevision,timeline,action='save') {
+    return this.transaction(()=>{
+      const current=this.getTimeline(id);
+      if(current.revision!==baseRevision)throw Error('revision_conflict');
+      let next=clone(timeline||current.timeline),past=current.past,future=current.future;
+      if(action==='undo'){
+        if(!past.length)throw Error('timeline_no_undo');next=past.at(-1);past=past.slice(0,-1);future=[current.timeline,...future];
+      }else if(action==='redo'){
+        if(!future.length)throw Error('timeline_no_redo');next=future[0];future=future.slice(1);past=[...past,current.timeline];
+      }else{past=[...past,current.timeline].slice(-100);future=[];}
+      const plan=this.timelinePlan(id,next);
+      const record=this.write('timeline',{id:current.id,projectId:id,revision:current.revision+1,timeline:next,past,future,hash:plan.hash,updatedAt:new Date().toISOString()});
+      return {...record,plan};
+    });
+  }
+  undoTimeline(id,baseRevision){return this.saveTimeline(id,baseRevision,null,'undo');}
+  redoTimeline(id,baseRevision){return this.saveTimeline(id,baseRevision,null,'redo');}
+  buildSelectedCutPlan(id) {
     const production = this.getProduction(id);
     if (!production.shots.length) throw new Error("selected_takes_required");
     const takes = production.shots.map((shot) => {
@@ -342,7 +400,7 @@ export class Studio {
       )
         throw new Error("ready_take_required");
       const asset = this.verifyAsset(job.output),
-        profile = job.snapshot.shot;
+        profile = job.media || job.snapshot.shot;
       return {
         shotId: shot.id,
         jobId: job.id,
@@ -352,14 +410,13 @@ export class Studio {
         height: profile.height,
         frames: profile.frames,
         fps: profile.fps,
+        audioStreams: profile.audioStreams || 0,
       };
     });
     const first = takes[0];
     if (
       takes.some(
         (t) =>
-          t.width !== first.width ||
-          t.height !== first.height ||
           t.fps !== first.fps,
       )
     )
@@ -368,11 +425,12 @@ export class Studio {
       projectId: id,
       title: production.title,
       takes,
-      width: first.width,
-      height: first.height,
+      width: Math.max(...takes.map(t=>t.width)),
+      height: Math.max(...takes.map(t=>t.height)),
       fps: first.fps,
       frames: takes.reduce((sum, t) => sum + t.frames, 0),
-      hash: fingerprint({ version: 1, takes }),
+      audioStreams: takes.some(t=>t.audioStreams>0)?1:0,
+      hash: fingerprint({ version: 2, takes,fit:'contain',audio:'stereo-48000-picture-duration' }),
     };
   }
   exportProduction(id) {
@@ -383,9 +441,11 @@ export class Studio {
     const refs = new Set(
       [
         ...production.shots.map((s) => s.reference),
+        ...production.shots.flatMap(s=>[s.endReference,s.location?.reference,...(s.characterStates||[]).map(c=>c.reference),...(s.extraReferences||[]).map(r=>r.assetId)]),
         ...(production.cast || []).map((c) => c.reference),
         production.place?.reference,
         ...jobs.map((j) => j.output),
+        ...jobs.flatMap(j=>[j.reviewFrames?.first,j.reviewFrames?.last]),
         ...jobs.flatMap((j) => j.snapshot.references.map((a) => a.id)),
         ...stages.flatMap((s) => s.views.map((v) => v.reference)),
         ...cuts.map((c) => c.output),
@@ -397,6 +457,8 @@ export class Studio {
       jobs,
       stages,
       cuts,
+      timeline: this.list('timeline').find(t=>t.projectId===id)||null,
+      canvas: this.list('canvas').find(c=>c.projectId===id)||null,
       assets: [...refs].map((id) => this.verifyAsset(id)),
       exportedAt: new Date().toISOString(),
     };

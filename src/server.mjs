@@ -5,6 +5,10 @@ import { fileURLToPath } from "node:url";
 import { Studio } from "./store.mjs";
 import { Renderer } from "./renderer.mjs";
 import { exportCut } from "./cut.mjs";
+import {productionWorkflow,decideTake} from './production-workflow.mjs';
+import {reviewFrames} from './review-frames.mjs';
+import {continueShot} from './continue-shot.mjs';
+import {getCanvas,saveCanvas,connectReference} from './canvas.mjs';
 const publicRoot = fileURLToPath(new URL("../public/", import.meta.url));
 async function body(req, limit = 2 * 1024 * 1024) {
   const chunks = [];
@@ -57,6 +61,22 @@ export function createServer({ studio, renderer }) {
       );
       const url = new URL(req.url, "http://" + expectedHost),
         parts = url.pathname.split("/").filter(Boolean);
+      if(parts[0]==='api'&&parts[1]==='productions'&&parts[3]==='canvas'&&parts.length===4){
+        if(req.method==='GET')return json(res,200,getCanvas(studio,parts[2]));
+        if(req.method==='PUT'){const input=JSON.parse(await body(req));return json(res,200,saveCanvas(studio,parts[2],input.baseRevision,input.positions));}
+      }
+      if(req.method==='POST'&&parts[0]==='api'&&parts[1]==='productions'&&parts[3]==='connections'&&parts.length===4)return json(res,200,connectReference(studio,parts[2],JSON.parse(await body(req))));
+      if(parts[0]==='api'&&parts[1]==='productions'&&parts[3]==='timeline'&&parts.length===4){
+        if(req.method==='GET')return json(res,200,studio.getTimeline(parts[2]));
+        if(req.method==='PUT'){const input=JSON.parse(await body(req));return json(res,200,studio.saveTimeline(parts[2],input.baseRevision,input.timeline));}
+      }
+      if(req.method==='POST'&&parts[0]==='api'&&parts[1]==='productions'&&parts[3]==='timeline'&&parts.length===5&&['undo','redo'].includes(parts[4])){
+        const input=JSON.parse(await body(req));return json(res,200,studio.saveTimeline(parts[2],input.baseRevision,null,parts[4]));
+      }
+      if(req.method==='GET'&&parts[0]==='api'&&parts[1]==='productions'&&parts[3]==='workflow'&&parts.length===4)return json(res,200,productionWorkflow(studio,parts[2]));
+      if(req.method==='POST'&&parts[0]==='api'&&parts[1]==='jobs'&&parts[3]==='decision'&&parts.length===4)return json(res,200,decideTake(studio,parts[2],JSON.parse(await body(req))));
+      if(req.method==='GET'&&parts[0]==='api'&&parts[1]==='jobs'&&parts[3]==='frames'&&parts.length===4)return json(res,200,await reviewFrames(studio,parts[2]));
+      if(req.method==='POST'&&parts[0]==='api'&&parts[1]==='productions'&&parts[3]==='continue-shot'&&parts.length===4)return json(res,201,await continueShot(studio,parts[2],JSON.parse(await body(req))));
       if (
         req.method === "POST" &&
         parts[0] === "api" &&
@@ -78,6 +98,8 @@ export function createServer({ studio, renderer }) {
           jobs: studio.listJobs(),
           stages: studio.list("stage"),
           cuts: studio.list("cut"),
+          timelines: studio.list('timeline').map(t=>({projectId:t.projectId,revision:t.revision,hash:t.hash||studio.timelinePlan(t.projectId,t.timeline).hash})),
+          workflows: studio.list('production').map(p=>productionWorkflow(studio,p.id)),
           renderer: await renderer.health(),
         });
       }
@@ -111,6 +133,15 @@ export function createServer({ studio, renderer }) {
         req.method === "POST" &&
         parts[0] === "api" &&
         parts[1] === "productions" &&
+        parts[3] === "reuse-take" && parts.length === 4
+      ) {
+        const input=JSON.parse(await body(req));
+        return json(res,201,studio.reuseTake(parts[2],input.baseRevision,input.shotId,input.sourceJobId));
+      }
+      if (
+        req.method === "POST" &&
+        parts[0] === "api" &&
+        parts[1] === "productions" &&
         parts[3] === "take" &&
         parts.length === 4
       ) {
@@ -128,11 +159,9 @@ export function createServer({ studio, renderer }) {
       }
       if (req.method === "POST" && url.pathname === "/api/jobs") {
         const input = JSON.parse(await body(req));
-        return json(
-          res,
-          201,
-          studio.prepareJob(input.projectId, input.shotId, input.requestKey),
-        );
+        let job=studio.prepareJob(input.projectId,input.shotId,input.requestKey);
+        if(job.snapshot.workflow.startsWith('minimax/h3-max/'))job=await renderer.fal.prepare(job.id);
+        return json(res,201,job);
       }
       if (
         req.method === "POST" &&
@@ -215,6 +244,13 @@ export function createServer({ studio, renderer }) {
       const files = {
         "/": ["index.html", "text/html"],
         "/app.js": ["app.js", "text/javascript"],
+        "/h3-ui.js": ["h3-ui.js", "text/javascript"],
+        "/production-workflow.js": ["production-workflow.js", "text/javascript"],
+        "/next-shot.js": ["next-shot.js", "text/javascript"],
+        "/timeline.js": ["timeline.js", "text/javascript"],
+        "/direct.js": ["direct.js", "text/javascript"],
+        "/canvas.js": ["canvas.js", "text/javascript"],
+        "/studio.css": ["studio.css", "text/css"],
         "/style.css": ["style.css", "text/css"],
       };
       if (req.method === "GET" && files[url.pathname]) {

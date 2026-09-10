@@ -3,6 +3,8 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { compileWan } from "./workflow.mjs";
+import {FalRenderer} from './fal-renderer.mjs';
+import {isH3} from './h3-spec.mjs';
 
 export async function probeVideo(filename) {
   const python =
@@ -50,7 +52,7 @@ export async function probeVideo(filename) {
 export class Renderer {
   constructor(
     studio,
-    { baseUrl = "http://127.0.0.1:8188", probe = probeVideo } = {},
+    { baseUrl = "http://127.0.0.1:8188", probe = probeVideo, fal = {} } = {},
   ) {
     const u = new URL(baseUrl);
     if (
@@ -62,6 +64,7 @@ export class Renderer {
     this.base = baseUrl;
     this.probe = probe;
     this.polling = new Set();
+    this.fal = new FalRenderer(studio,fal);
   }
   async request(endpoint, options = {}) {
     const response = await fetch(this.base + endpoint, {
@@ -76,18 +79,21 @@ export class Renderer {
     return (await this.request(endpoint, options)).json();
   }
   async health() {
+    const fal={configured:!!this.fal.key,name:'H3 Max · fal',budget:this.fal.budget()};
     try {
       const stats = await this.json("/system_stats");
-      return { online: true, name: "Wan 2.2 · local", stats };
+      return { online: true, name: "Wan 2.2 · local", stats, fal };
     } catch {
       return {
         online: false,
         name: "Wan 2.2 · local",
+        fal,
         reason: "Local renderer is offline. Prepared work is saved.",
       };
     }
   }
   async submit(id) {
+    if(isH3(this.studio.getJob(id)))return this.fal.submit(id);
     let job = this.studio.getJob(id);
     if (job.providerId) return job;
     if (job.state === "unknown" || job.state === "submitting")
@@ -152,6 +158,7 @@ export class Renderer {
     }
   }
   async reconcile(id) {
+    if(isH3(this.studio.getJob(id)))return this.fal.reconcile(id);
     let job = this.studio.getJob(id);
     if (!job.providerId || job.state === "ready" || job.state === "failed")
       return job;

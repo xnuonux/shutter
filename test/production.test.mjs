@@ -164,3 +164,14 @@ test("native workflow receives the selected input image and supported settings",
     /unsupported_profile/,
   );
 });
+test('reusing a ready take preserves provenance without carrying a second charge',t=>{
+ const {studio,project}=fixture(t);const source=studio.prepareJob(project.id,'wide','original');const asset=studio.importAsset(Buffer.from([0,0,0,16,102,116,121,112,105,115,111,109,0,0,0,0]));
+ const target=studio.createProduction({...project,id:undefined,title:'New cut'});
+ assert.throws(()=>studio.reuseTake(target.id,1,'wide',source.id),/ready_take_required/);
+ studio.updateJob(source.id,{state:'ready',output:asset.id,charge:{actualUsd:.25},providerId:'paid-once',media:{width:832,height:480,frames:124,fps:24}});
+ const reused=studio.reuseTake(target.id,1,'wide',source.id);
+ assert.equal(reused.sourceJobId,source.id);assert.equal(reused.output,asset.id);assert.equal(reused.charge,undefined);assert.equal(reused.providerId,null);
+ assert.equal(studio.getProduction(target.id).shots[0].selectedTake,reused.id);
+ assert.equal(studio.getJob(source.id).charge.actualUsd,.25);
+ assert.throws(()=>studio.reuseTake(target.id,1,'wide',source.id),/revision_conflict/);
+});

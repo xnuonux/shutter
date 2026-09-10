@@ -130,4 +130,16 @@ test("an agent can negotiate MCP, revise a real shot and prepare it idempotently
   });
   assert.equal(bad.result.isError, true);
   assert.equal(studio.getProduction(p.id).revision, 2);
+  const take=first.result.structuredContent;
+  const video=studio.importAsset(Buffer.from('000000186674797000','hex'));
+  studio.updateJob(take.id,{state:'ready',output:video.id,media:{frames:121,fps:24,width:768,height:512,audioStreams:0}});
+  studio.selectTake(p.id,2,'one',take.id);
+  const timeline=await call('tools/call',{name:'shutter_get_timeline',arguments:{projectId:p.id}});
+  assert.equal(timeline.result.isError,undefined,'agent must read the same editing timeline as the UI');
+  const edit=timeline.result.structuredContent.timeline;edit.main[0].sourceIn=24;
+  const saved=await call('tools/call',{name:'shutter_save_timeline',arguments:{projectId:p.id,baseRevision:0,timeline:edit}});
+  assert.equal(saved.result.isError,undefined);
+  assert.equal(studio.buildCutPlan(p.id).frames,97);
+  const stale=await call('tools/call',{name:'shutter_save_timeline',arguments:{projectId:p.id,baseRevision:0,timeline:edit}});
+  assert.equal(stale.result.isError,true);assert.equal(studio.listJobs().length,1);
 });

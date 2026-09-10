@@ -18,6 +18,8 @@ const object = (properties, required = []) => ({
   additionalProperties: false,
 });
 const definitions = [
+  ['shutter_get_timeline','Read the same saved scene timeline and exact source ranges as the visual editor. Coverage replaces picture without adding time; audio follows main footage.',object({projectId:id},['projectId']),true],
+  ['shutter_save_timeline','Save a reversible edit to the observed timeline revision. Use integer source frames, stable clip IDs and ready takes. Does not generate video or spend credits. Read the timeline again on conflict.',object({projectId:id,baseRevision:{type:'integer',minimum:0},timeline:{type:'object'}},['projectId','baseRevision','timeline']),false],
   [
     "shutter_list_productions",
     "List local productions without loading their full take histories.",
@@ -68,7 +70,7 @@ const definitions = [
   ],
   [
     "shutter_render_shot",
-    "Submit a prepared shot to the local GPU. Use only when the user authorized generation. Does not start ComfyUI or use a paid provider; unknown outcomes cannot be resubmitted.",
+      "Submit to the saved renderer: local Wan or paid H3 Max on fal. Requires generation authorization. Inspect the paid quote and budget first. Unknown outcomes cannot be resubmitted. Does not start ComfyUI.",
     object({ jobId: id }, ["jobId"]),
     false,
   ],
@@ -132,6 +134,11 @@ async function invoke(name, args) {
   const definition = tools.find((t) => t.name === name);
   if (!definition) throw new Error("Unknown tool.");
   validate(definition.inputSchema, args);
+  if(name==='shutter_get_timeline'||name==='shutter_save_timeline'){
+    const route='/api/productions/'+encodeURIComponent(args.projectId)+'/timeline';
+    const result=await (name==='shutter_get_timeline'?api(route):api(route,{baseRevision:args.baseRevision,timeline:args.timeline},'PUT'));
+    const {past,future,...current}=result;return {...current,canUndo:past.length>0,canRedo:future.length>0};
+  }
   if (name === "shutter_prepare_shot") return api("/api/jobs", args);
   if (name === "shutter_render_shot")
     return api("/api/jobs/" + encodeURIComponent(args.jobId) + "/run", {});

@@ -3,7 +3,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
-import { probeVideo } from "./renderer.mjs";
+import { probeMedia } from "./fal-renderer.mjs";
 const execute = promisify(execFile),
   inflight = new Map();
 export async function exportCut(studio, projectId) {
@@ -23,6 +23,10 @@ export async function exportCut(studio, projectId) {
     const spec = {
       ...plan,
       inputs: plan.takes.map((t) => studio.assetPath(t.assetId)),
+      ...(plan.videoSegments?{
+        videoSegments:plan.videoSegments.map(s=>({...s,path:studio.assetPath(s.assetId)})),
+        audioSegments:plan.audioSegments.map(s=>({...s,path:studio.assetPath(s.assetId)})),
+      }:{}),
       output: path.join(folder, "review-cut.mp4"),
     };
     const filename = path.join(folder, "spec.json");
@@ -34,18 +38,18 @@ export async function exportCut(studio, projectId) {
       python,
       [
         "-s",
-        fileURLToPath(new URL("../tools/assemble_cut.py", import.meta.url)),
+        fileURLToPath(new URL(plan.videoSegments?"../tools/assemble_timeline.py":"../tools/assemble_cut.py", import.meta.url)),
         filename,
       ],
       { windowsHide: true, timeout: 600000, maxBuffer: 100000 },
     );
-    const media = await probeVideo(spec.output);
+    const media = await probeMedia(spec.output);
     if (
       !media.decoded ||
       media.frames !== plan.frames ||
       media.width !== plan.width ||
       media.height !== plan.height ||
-      media.fps !== plan.fps
+      media.fps !== plan.fps || media.audioStreams !== plan.audioStreams
     )
       throw new Error("cut_verification_failed");
     const asset = studio.importAsset(fs.readFileSync(spec.output), {

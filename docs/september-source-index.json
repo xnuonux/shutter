@@ -1,0 +1,136 @@
+{
+  "scope": {
+    "from": "2026-08-01",
+    "through": "2026-09-09",
+    "undatedEndpointRule": "current configuration only, not a dated release"
+  },
+  "sources": [
+    {
+      "id": 1,
+      "publisher": "fal",
+      "title": "H3 Max text-to-video",
+      "url": "https://fal.ai/models/minimax/h3-max/text-to-video",
+      "dateAndScope": "Live endpoint and agent-readable schema, checked September 9, 2026.",
+      "accessed": "2026-09-09"
+    },
+    {
+      "id": 2,
+      "publisher": "fal",
+      "title": "H3 Max image-to-video",
+      "url": "https://fal.ai/models/minimax/h3-max/image-to-video",
+      "dateAndScope": "Live endpoint and agent-readable schema, checked September 9, 2026.",
+      "accessed": "2026-09-09"
+    },
+    {
+      "id": 3,
+      "publisher": "fal",
+      "title": "H3 Max reference-to-video",
+      "url": "https://fal.ai/models/minimax/h3-max/reference-to-video",
+      "dateAndScope": "Live endpoint and reference-token pricing, checked September 9, 2026.",
+      "accessed": "2026-09-09"
+    },
+    {
+      "id": 4,
+      "publisher": "fal",
+      "title": "H3 Max Multi Angle",
+      "url": "https://fal.ai/models/minimax/h3-max/multi-angle/image-to-video",
+      "dateAndScope": "Live endpoint and schema, checked September 9, 2026; release date not established.",
+      "accessed": "2026-09-09"
+    },
+    {
+      "id": 5,
+      "publisher": "BytePlus",
+      "title": "How To Use Seedance 2.5: Documentation Guide",
+      "url": "https://fal.ai/learn/devs/how-to-use-seedance-2-5",
+      "dateAndScope": "August 7, 2026. Reference-role and state-progression sections.",
+      "accessed": "2026-09-09"
+    },
+    {
+      "id": 6,
+      "publisher": "Emily Peng, Kapwing",
+      "title": "How to Make a Full AI Video from a Storyboard",
+      "url": "https://www.kapwing.com/resources/how-to-make-a-full-ai-video-from-a-storyboard-seedance-2-5/",
+      "dateAndScope": "August 20, 2026.",
+      "accessed": "2026-09-09"
+    },
+    {
+      "id": 7,
+      "publisher": "Emily Peng, Kapwing",
+      "title": "Is Seedance 2.5 Actually Better Than 2.0?",
+      "url": "https://www.kapwing.com/resources/is-seedance-2-5-actually-better-than-2-0-heres-what-i-found/",
+      "dateAndScope": "September 9, 2026.",
+      "accessed": "2026-09-09"
+    },
+    {
+      "id": 8,
+      "publisher": "Higgsfield",
+      "title": "How We Built Cinema Studio",
+      "url": "https://higgsfield.ai/blog/how-we-built-cinema-studio",
+      "dateAndScope": "August 12, 2026.",
+      "accessed": "2026-09-09"
+    },
+    {
+      "id": 9,
+      "publisher": "Higgsfield",
+      "title": "Blender: Features, Installation, and MCP Bridge Setup",
+      "url": "https://higgsfield.ai/blog/higgsfield-blender-plugin",
+      "dateAndScope": "August 20, 2026.",
+      "accessed": "2026-09-09"
+    },
+    {
+      "id": 10,
+      "publisher": "Higgsfield",
+      "title": "3D Jutsu: Build and Animate 3D Scenes from a Prompt",
+      "url": "https://higgsfield.ai/blog/higgsfield-3d-jutsu",
+      "dateAndScope": "September 5, 2026.",
+      "accessed": "2026-09-09"
+    },
+    {
+      "id": 11,
+      "publisher": "Higgsfield",
+      "title": "How to Turn Claude Into a Full Creative Studio",
+      "url": "https://higgsfield.ai/blog/claude-higgsfield-mcp-creative-studio",
+      "dateAndScope": "September 2, 2026.",
+      "accessed": "2026-09-09"
+    },
+    {
+      "id": 12,
+      "publisher": "Higgsfield",
+      "title": "Genjutsu: How It Works and What You Get",
+      "url": "https://higgsfield.ai/blog/higgsfield-genjutsu",
+      "dateAndScope": "August 31, 2026.",
+      "accessed": "2026-09-09"
+    },
+    {
+      "id": 13,
+      "publisher": "John Ozuysal, fal",
+      "title": "Real-Time Video Editing with AI",
+      "url": "https://fal.ai/learn/tools/real-time-video-editing-with-ai",
+      "dateAndScope": "September 2, 2026.",
+      "accessed": "2026-09-09"
+    },
+    {
+      "id": 14,
+      "publisher": "John Ozuysal, fal",
+      "title": "Gemini Omni Flash 1.1: Prompts and Workflows",
+      "url": "https://fal.ai/learn/tools/how-to-use-gemini-omni-flash-1-1",
+      "dateAndScope": "September 6, 2026.",
+      "accessed": "2026-09-09"
+    },
+    {
+      "id": 15,
+      "publisher": "John Ozuysal, fal",
+      "title": "How To Use MiniMax H3 Max",
+      "url": "https://fal.ai/learn/tools/how-to-use-minimax-h3-max",
+      "dateAndScope": "September 1, 2026. Useful workflow and editing distinction; its older resolution/pricing statements are superseded by current endpoint pages.",
+      "accessed": "2026-09-09"
+    }
+  ],
+  "limitations": [
+    "No new Max outputs generated",
+    "No independent benchmark ranking established",
+    "Reddit 12-minute-film lead excluded from dated proof: publication date/runtime provenance unverified",
+    "AI Video School reverse-angle page refresh could not be retrieved; no retry after non-retryable result",
+    "No new repository implementation verified beyond prior saved six-repository audit"
+  ]
+}
