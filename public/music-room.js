@@ -1,3 +1,4 @@
+import {takeProposal} from './memory-contract.mjs';
 import {paintDraftText} from './text-room.js';
 import {soundIdentity} from './sound-edit.mjs';
 import {applyEdit, placements, totalFrames, clipAt, beatGrid, snapFrame, formatPosition, normalizeMarkers, asNumber, exact, MUSIC_SCHEMA} from './music-edit.mjs';
@@ -57,7 +58,7 @@ export class MusicRoom {
     document.addEventListener('visibilitychange',()=>{if(document.hidden)this.pause();});
     this.audio.addEventListener('ended',()=>{if(this.playing)this.anchor={seconds:this.audio.duration,wall:performance.now()};});
     this.audio.addEventListener('error',()=>{if(this.playing){this.pause();this.notify('This browser could not play the selected audio. The source is unchanged; use a supported WAV for monitoring.');}});
-    this.video.addEventListener('error',()=>{program.querySelector('#program-note').textContent='Picture playback unavailable in this browser. Make a viewing proxy from the source; no source file was changed.';});
+    this.video.addEventListener('error',()=>{program.querySelector('#program-note').textContent=(this.audition?'AUDITION ONLY — ':'')+'Picture playback unavailable in this browser. Make a viewing proxy from the source; no source file was changed.';});
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(this.$('#cut-scroll'));
   }
   safely(fn){try{Promise.resolve(fn()).catch(e=>this.notify(e.message.replaceAll('_',' ')));}catch(e){this.notify(e.message.replaceAll('_',' '));}}
@@ -72,7 +73,7 @@ export class MusicRoom {
   update(projectKey){
     const edit=this.getEdit();if(!edit)return;
     if(this.projectKey!==projectKey){this.pause();this.frame=0;this.selected=null;this.projectKey=projectKey;}
-    const signature=JSON.stringify(edit);if(signature!==this.signature){this.pause();this.signature=signature;}
+    const signature=JSON.stringify(edit);if(signature!==this.signature){this.pause();if(this.audition){this.audition=null;delete this.program.dataset.audition;this.program.querySelector('#program-note').textContent='Current draft. Source-rate playback and browser text are approximate.';}this.signature=signature;}
     this.frame=Math.min(this.frame,this.playEnd());if(!edit.clips.some(c=>c.id===this.selected))this.selected=edit.clips[0]?.id||null;
     const m=edit.music;
     this.$('#song-bpm').value=m?asNumber(exact(m.bpm)):120;this.$('#song-meter').value=m?.beatsPerBar||4;this.$('#song-unit').value=m?.beatUnit||4;this.$('#song-offset').value=m?.offsetFrames||0;
@@ -151,10 +152,19 @@ export class MusicRoom {
     else if(this.frame>=this.playEnd()){this.frame=this.playEnd();this.pause();this.showPicture();this.draw();return;}
     this.showPicture();this.positionLabel();this.draw();this.animation=requestAnimationFrame(()=>this.tick());
   }
+  setTakeAudition(clipId,candidate){
+    const edit=this.getEdit(),profile=this.getState().assets.find(a=>a.id===candidate.assetId)?.media;
+    if(!profile)throw Error('source_unavailable');const proposal=takeProposal(edit,clipId,candidate,profile),selection=proposal.clips.find(c=>c.id===clipId);
+    this.pause();this.selected=clipId;this.audition={clipId,selection};this.program.dataset.audition='true';
+    this.program.querySelector('#program-note').textContent='AUDITION ONLY — '+candidate.label+'. The saved cut and sound are unchanged.';
+    this.seek(placements(edit).find(c=>c.id===clipId).at);
+  }
+  clearTakeAudition(){this.pause();this.audition=null;delete this.program.dataset.audition;this.program.querySelector('#program-note').textContent='Current draft. Source-rate playback and browser text are approximate.';this.showPicture(true);}
   showPicture(force=false){
     const edit=this.getEdit();if(!edit)return;
     paintDraftText(this.program.querySelector('.program-view'),edit,this.frame);
-    const c=this.frame<totalFrames(edit)?clipAt(edit,this.frame):null;
+    let c=this.frame<totalFrames(edit)?clipAt(edit,this.frame):null;
+    if(c&&this.audition?.clipId===c.id)c={...c,...this.audition.selection};
     if(!c){this.video.hidden=true;this.video.pause();this.image.hidden=true;this.empty.hidden=false;this.empty.textContent=edit.soundtrack?'No picture here. Your song continues.':'Place a shot to start the picture.';return;}
     const a=this.getState().assets.find(a=>a.id===c.assetId);if(!a)return;
     this.empty.hidden=true;const fit=c.fit==='contain'?'contain':'cover';this.video.style.objectFit=fit;this.image.style.objectFit=fit;
