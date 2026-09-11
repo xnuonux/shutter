@@ -1,4 +1,7 @@
 import fs from 'node:fs';
+import { analyzeWaveform, readWaveform } from './media-waveform.mjs';
+import { applyEdit } from '../public/music-edit.mjs';
+import { getMediaProfile } from './media-io.mjs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,7 +21,7 @@ export function createMediaProduction(studio,input) {
 }
 /** Invoke only after the parent server's localhost/Origin/Sec-Fetch-Site gate. */
 export async function handleMediaRequest(studio,req,res,url) {
-  const staticFiles={'/media-studio':['media-studio.html','text/html'],'/media-studio.js':['media-studio.js','text/javascript'],'/media-studio.css':['media-studio.css','text/css']};
+  const staticFiles={'/music-edit.mjs':['music-edit.mjs','text/javascript'],'/music-room.js':['music-room.js','text/javascript'],'/music-room.css':['music-room.css','text/css'],'/edit-recovery.mjs':['edit-recovery.mjs','text/javascript'],'/media-studio':['media-studio.html','text/html'],'/media-studio.js':['media-studio.js','text/javascript'],'/media-studio.css':['media-studio.css','text/css']};
   if(req.method==='GET'&&staticFiles[url.pathname]) {
     const [name,type]=staticFiles[url.pathname];res.writeHead(200,{'content-type':type,'cache-control':'no-cache'});res.end(await fsp.readFile(path.join(publicRoot,name)));return true;
   }
@@ -39,6 +42,26 @@ export async function handleMediaRequest(studio,req,res,url) {
       const length=req.headers['content-length'];
       if(length!==undefined&&(!/^\d+$/.test(length)||Number(length)>MAX_IMPORT_BYTES))throw Error('asset_size');
       const result=await mediaExclusive(studio,()=>importMedia(studio,req,{name:url.searchParams.get('name')}));json(res,201,result);return true;
+    }
+    if(parts.length===5&&parts[2]==='assets'&&parts[4]==='waveform') {
+      if(req.method==='GET'){json(res,200,await readWaveform(studio,parts[3]));return true;}
+      if(req.method==='POST'){
+        await body(req);
+        const abort=new AbortController(),cancel=()=>{if(!res.writableEnded)abort.abort();};
+        res.once('close',cancel);
+        try{json(res,200,await mediaExclusive(studio,()=>analyzeWaveform(studio,parts[3],{signal:abort.signal})));}
+        finally{res.removeListener('close',cancel);}return true;
+      }
+    }
+    if(req.method==='POST'&&parts[2]==='productions'&&parts[4]==='commands'&&parts.length===5) {
+      const input=await body(req),record=studio.getTimeline(parts[3]);
+      if(record.timeline.format!==MEDIA_EDIT_FORMAT)throw Error('media_edit_required');
+      if(!Number.isSafeInteger(input.baseRevision)||record.revision!==input.baseRevision)throw Error('revision_conflict');
+      const ids=new Set(record.timeline.clips.map(c=>c.assetId));
+      if(input.command?.assetId)ids.add(input.command.assetId);
+      const profiles=new Map([...ids].map(id=>[id,getMediaProfile(studio,id)]));
+      const next=applyEdit(record.timeline,input.command,profiles);
+      json(res,200,studio.saveTimeline(parts[3],input.baseRevision,next));return true;
     }
     if(req.method==='POST'&&parts.length===5&&parts[2]==='assets'&&parts[4]==='probe') {json(res,200,await mediaExclusive(studio,()=>ensureMediaProfile(studio,parts[3])));return true;}
     if(req.method==='POST'&&parts.length===5&&parts[2]==='assets'&&parts[4]==='derive-image') {const input=await body(req);json(res,201,await mediaExclusive(studio,()=>deriveImage(studio,parts[3],input)));return true;}
