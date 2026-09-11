@@ -1,3 +1,6 @@
+import {inspectProcess} from './media-inspect.mjs';
+import {normalizeTextLayer,textReview} from '../public/text-edit.mjs';
+import {preflightText,burnedCues,burnTextPicture,writeTextHandoff} from './media-text.mjs';
 import {isPrepared709, COLOR_TAG_ARGS, PREPARED_YUV_SCALE} from '../public/color-contract.mjs';
 /** Asset-backed rough cuts in the existing timeline record, not a second timeline store. */
 import fs from 'node:fs';
@@ -63,10 +66,14 @@ export function compileMediaEdit(studio,projectId,edit) {
     sources.set(asset.id,{assetId:asset.id,sha256:asset.sha256,kind:'audio',media});
   }
   if(markers.some(m=>m.frame>=frames))warnings.add('Some cue markers are outside the current picture duration. They remain fixed on the song clock.');
+  const textLayer=normalizeTextLayer(edit.textLayer);
+  const textIssues=textReview(textLayer,frames,rateText(fps));
+  if(textIssues.some(i=>i.blocking))warnings.add('Text extends past picture. Adjust its frames before export; nothing is silently removed.');
+  if(textIssues.some(i=>!i.blocking))warnings.add('Text has reading-speed, wrapping or collision review prompts. Review the finishing panel.');
   const audioSamples=frameSamples(frames,fps);
   const soundStage=compileSoundStage(studio,edit,sources,warnings,audioSamples);
   if(soundStage)warnings.delete('Camera audio is excluded. Only the selected master track plays, or silence when no track is selected.');
-  const plan={version:soundStage?6:5,format:MEDIA_EDIT_FORMAT,projectId,title:production.title,fps:rateText(fps),width,height,frames,
+  const plan={version:textLayer?7:soundStage?6:5,...(textLayer?{textLayer,textIssues}:{}),format:MEDIA_EDIT_FORMAT,projectId,title:production.title,fps:rateText(fps),width,height,frames,
     duration:frames/rateValue(fps),audioSamples,sampleRate:48000,
     clips,soundtrack,music,markers,sources:[...sources.values()],takes:[],audioStreams:soundStage||soundtrack?1:0,
     ...(soundStage?{soundStage,soundIdentity:soundIdentity(edit)}:{}),
@@ -123,6 +130,7 @@ export async function renderMediaEdit(studio,projectId,{baseRevision,acknowledge
   // Do not start a lengthy render that cannot produce its requested interchange package.
   rateXml(plan.fps);
   checkSoundBudget(plan);
+  await preflightText(plan);
   for(const s of plan.sources)await verifyMediaAsset(studio,s.assetId);
   const base=path.join(studio.root,'media-renders');await fsp.mkdir(base,{recursive:true});
   const folder=await fsp.mkdtemp(path.join(base,'cut-')), files=[], mediaFiles=[];
@@ -142,8 +150,12 @@ export async function renderMediaEdit(studio,projectId,{baseRevision,acknowledge
     }
     const concat=path.join(folder,'concat.txt');
     await fsp.writeFile(concat,files.map(n=>`file '${n}'`).join('\n')+'\n');
-    const silent=path.join(folder,'picture.mp4');
+    const cleanPicture=path.join(folder,'picture.mp4');let silent=cleanPicture;let textRenderEvidence=null;
     await runMedia('ffmpeg',['-v','error','-nostdin','-f','concat','-safe','1','-i',concat,'-map','0:v:0','-c','copy','-movflags','+faststart',silent],{timeoutMs:900000});
+    if(burnedCues(plan).length) {
+      silent=path.join(folder,'text-picture.mp4');
+      textRenderEvidence=await burnTextPicture(plan,folder,cleanPicture,silent);
+    }
     const output=path.join(folder,'preview.mp4');
     let soundFiles=[];
     if(plan.soundStage) {
@@ -169,13 +181,43 @@ export async function renderMediaEdit(studio,projectId,{baseRevision,acknowledge
     await fsp.writeFile(path.join(folder,'timeline.xml'),makeBridgeXml(plan,files));
     await fsp.writeFile(path.join(folder,'timeline.otio'),JSON.stringify(makeBridgeOtio(plan,files),null,2)+'\n');
     await fsp.writeFile(path.join(folder,'cues.csv'),makeCueCsv(plan));
+    const textHandoff=await writeTextHandoff(plan,folder,{renderEvidence:textRenderEvidence});mediaFiles.push(...textHandoff.files);
     await fsp.writeFile(path.join(folder,'manifest.json'),JSON.stringify({format:'shutter-bridge-v1',revision:record.revision,plan,files:mediaFiles,
-      limitations:['Conformed H.264 rough-cut media, not camera-original grading handles.','Relative interchange paths require relinking the included media in the target editor.','Resolve/OTIO application import has not been certified.','No native FLP/DRP/PSD round-trip.','Original song is unchanged; included 48 kHz PCM is a derived, aligned delivery track.']},null,2)+'\n');
-    const bridgeFiles=[...files,...(plan.soundStage?soundFiles:plan.soundtrack?['master-48k.wav']:[]),'timeline.xml','timeline.otio','cues.csv','manifest.json'];
+      limitations:['Text in the final preview is not recreated by the clean-shot XML/OTIO handoff. Use caption sidecars and text-layer.json.','Conformed H.264 rough-cut media, not camera-original grading handles.','Relative interchange paths require relinking the included media in the target editor.','Resolve/OTIO application import has not been certified.','No native FLP/DRP/PSD round-trip.','Original song is unchanged; included 48 kHz PCM is a derived, aligned delivery track.']},null,2)+'\n');
+    const bridgeFiles=[...files,...(plan.soundStage?soundFiles:plan.soundtrack?['master-48k.wav']:[]),'timeline.xml','timeline.otio','cues.csv','manifest.json',...textHandoff.names];
     const hasZip=await writeBridgeZip(folder,bridgeFiles,path.join(folder,'shutter-handoff.zip'));
     const cut=studio.write('cut',{id:'cut_'+crypto.randomUUID(),projectId,output:asset.id,plan,revision:record.revision,
-      bridgeFolder:path.basename(folder),bridgeFiles:hasZip?[...bridgeFiles,'shutter-handoff.zip']:bridgeFiles,zipStatus:hasZip?'ready':'zip64_required-use-individual-files',createdAt:new Date().toISOString()});
-    await fsp.rm(concat,{force:true});await fsp.rm(silent,{force:true});await fsp.rm(output,{force:true});
+      ...(textRenderEvidence?{textRenderEvidence}:{}),bridgeFolder:path.basename(folder),bridgeFiles:hasZip?[...bridgeFiles,'shutter-handoff.zip']:bridgeFiles,zipStatus:hasZip?'ready':'zip64_required-use-individual-files',createdAt:new Date().toISOString()});
+    await fsp.rm(concat,{force:true});await fsp.rm(silent,{force:true});await fsp.rm(cleanPicture,{force:true});await fsp.rm(output,{force:true});
     completed=true;return cut;
   } finally { if(!completed)await fsp.rm(folder,{recursive:true,force:true}); }
+}
+
+/** One actual compositor frame for the saved revision, not an HTML approximation. */
+export async function renderMediaTextFrame(studio,projectId,{baseRevision,frame,acknowledgeUnmanagedColor=false}={}, {signal}={}) {
+  if(signal?.aborted)throw Error('text_preview_cancelled');
+  const record=studio.getTimeline(projectId),plan=record.plan;
+  if(record.timeline.format!==MEDIA_EDIT_FORMAT)throw Error('media_edit_required');
+  if(!Number.isSafeInteger(baseRevision)||record.revision!==baseRevision)throw Error('revision_conflict');
+  if(!Number.isSafeInteger(frame)||frame<0||frame>=plan.frames)throw Error('text_preview_frame');
+  if(!acknowledgeUnmanagedColor)throw Error('reference_color_review_required');
+  await preflightText(plan);
+  const c=plan.clips.find(c=>frame>=c.at&&frame<c.at+c.frames),p=getMediaProfile(studio,c.assetId);
+  await verifyMediaAsset(studio,c.assetId);
+  const base=path.join(studio.root,'text-previews');await fsp.mkdir(base,{recursive:true});
+  const folder=await fsp.mkdtemp(path.join(base,'frame-'));
+  try {
+    const clean=path.join(folder,'clean.png'),target=path.join(folder,'text.png');
+    const sourceSampling=c.sampling||samplingFor(c,plan.fps);
+    const selection={...c,frames:1,sampling:{...sourceSampling,offsetFrames:sourceSampling.offsetFrames+frame-c.at}};
+    await inspectProcess('ffmpeg',['-v','error','-nostdin',...decoderArgs,...(p.kind==='image'?['-loop','1','-framerate',plan.fps]:[]),'-i',studio.assetPath(c.assetId),
+      '-map',`0:${p.videoStream}`,'-vf',mediaPictureFilters(plan,selection,p),'-frames:v','1','-an','-c:v','png','-threads','1','-filter_threads','1',clean],{timeoutMs:600000,signal});
+    let evidence=null;
+    if(burnedCues(plan).some(c=>c.startFrame<=frame&&frame<c.endFrame))evidence=await burnTextPicture(plan,folder,clean,target,{offset:frame,count:1,still:true,signal});
+    else await fsp.copyFile(clean,target);
+    if(signal?.aborted)throw Error('text_preview_cancelled');
+    const asset=await importMediaFile(studio,target,{name:plan.title+' · text review frame '+frame+'.png',origin:'Saved composition text review; unmanaged SDR; no generation'});
+    return studio.write('text-preview',{id:'text_preview_'+crypto.randomUUID(),projectId,revision:record.revision,frame,planHash:plan.hash,imageAssetId:asset.id,sourceAssetId:c.assetId,
+      sourceSha256:p.assetSha256,textLayer:plan.textLayer||null,renderEvidence:evidence,createdAt:new Date().toISOString()});
+  } finally {await fsp.rm(folder,{recursive:true,force:true});}
 }

@@ -1,3 +1,4 @@
+import {normalizeTextLayer} from './text-edit.mjs';
 /** Pure, shared edit algebra. Frame positions are integers; source time is rational.
  * No DOM, clock, random IDs, asset mutation, playback, or provider side effects. */
 export const MUSIC_SCHEMA = 'shutter-music-map-v1';
@@ -91,6 +92,7 @@ export function samplingFor(clip, fps) {
 }
 /** Reject unavailable handles locally too. The server compiler is final authority. */
 export function validateVisuals(edit, profiles) {
+  normalizeTextLayer(edit?.textLayer);
   if (!edit || edit.format !== 'shutter-media-edit-v1' || !Array.isArray(edit.clips) || edit.clips.length > 250) fail('media_edit_invalid');
   const fps = asNumber(exact(edit.fps));
   if (fps < 1 || fps > 120 || totalFrames(edit) / fps > 14400) fail('media_edit_duration');
