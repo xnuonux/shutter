@@ -1,3 +1,4 @@
+import {importColorLut, previewColor, prepareColor} from './media-color.mjs';
 import {checkDelivery} from './media-delivery.mjs';
 import {renderListeningMix} from './media-sound.mjs';
 import {applySoundEdit} from '../public/sound-edit.mjs';
@@ -24,7 +25,7 @@ export function createMediaProduction(studio,input) {
 }
 /** Invoke only after the parent server's localhost/Origin/Sec-Fetch-Site gate. */
 export async function handleMediaRequest(studio,req,res,url) {
-  const staticFiles={'/delivery-contract.mjs':['delivery-contract.mjs','text/javascript'],'/delivery-room.js':['delivery-room.js','text/javascript'],'/delivery-room.css':['delivery-room.css','text/css'],'/sound-edit.mjs':['sound-edit.mjs','text/javascript'],'/sound-room.js':['sound-room.js','text/javascript'],'/sound-room.css':['sound-room.css','text/css'],'/music-edit.mjs':['music-edit.mjs','text/javascript'],'/music-room.js':['music-room.js','text/javascript'],'/music-room.css':['music-room.css','text/css'],'/edit-recovery.mjs':['edit-recovery.mjs','text/javascript'],'/media-studio':['media-studio.html','text/html'],'/media-studio.js':['media-studio.js','text/javascript'],'/media-studio.css':['media-studio.css','text/css']};
+  const staticFiles={'/color-contract.mjs':['color-contract.mjs','text/javascript'],'/color-room.js':['color-room.js','text/javascript'],'/color-room.css':['color-room.css','text/css'],'/delivery-contract.mjs':['delivery-contract.mjs','text/javascript'],'/delivery-room.js':['delivery-room.js','text/javascript'],'/delivery-room.css':['delivery-room.css','text/css'],'/sound-edit.mjs':['sound-edit.mjs','text/javascript'],'/sound-room.js':['sound-room.js','text/javascript'],'/sound-room.css':['sound-room.css','text/css'],'/music-edit.mjs':['music-edit.mjs','text/javascript'],'/music-room.js':['music-room.js','text/javascript'],'/music-room.css':['music-room.css','text/css'],'/edit-recovery.mjs':['edit-recovery.mjs','text/javascript'],'/media-studio':['media-studio.html','text/html'],'/media-studio.js':['media-studio.js','text/javascript'],'/media-studio.css':['media-studio.css','text/css']};
   if(req.method==='GET'&&staticFiles[url.pathname]) {
     const [name,type]=staticFiles[url.pathname];res.writeHead(200,{'content-type':type,'cache-control':'no-cache'});res.end(await fsp.readFile(path.join(publicRoot,name)));return true;
   }
@@ -34,7 +35,19 @@ export async function handleMediaRequest(studio,req,res,url) {
     if(req.method==='GET'&&url.pathname==='/api/media/state') {
       const timelines=studio.list('timeline').filter(r=>r.timeline?.format===MEDIA_EDIT_FORMAT);
       const profiles=new Map(studio.list('media-profile').map(p=>[p.assetId,p]));
-      json(res,200,{deliveryChecks:studio.list('delivery-check'),listeningMixes:studio.list('listening-mix'),productions:studio.list('production'),timelines,derivations:studio.list('media-derivation'),assets:studio.list('asset').map(a=>({...a,media:profiles.get(a.id)||null})),cuts:studio.list('cut').filter(c=>c.plan?.format===MEDIA_EDIT_FORMAT)});return true;
+      json(res,200,{colorLuts:studio.list('color-lut'),colorPreviews:studio.list('color-preview'),deliveryChecks:studio.list('delivery-check'),listeningMixes:studio.list('listening-mix'),productions:studio.list('production'),timelines,derivations:studio.list('media-derivation'),assets:studio.list('asset').map(a=>({...a,media:profiles.get(a.id)||null})),cuts:studio.list('cut').filter(c=>c.plan?.format===MEDIA_EDIT_FORMAT)});return true;
+    }
+    if(req.method==='POST'&&url.pathname==='/api/media/color/luts') {
+      const result=await mediaExclusive(studio,()=>importColorLut(studio,req,{name:url.searchParams.get('name'),inputEncoding:url.searchParams.get('inputEncoding')}));
+      json(res,201,result);return true;
+    }
+    if(req.method==='POST'&&parts.length===5&&parts[2]==='assets'&&['color-preview','color-prepare'].includes(parts[4])) {
+      const input=await body(req),abort=new AbortController(),cancel=()=>{if(!res.writableEnded)abort.abort();};
+      res.once('close',cancel);
+      try {const fn=parts[4]==='color-preview'?previewColor:prepareColor;
+        const result=await mediaExclusive(studio,()=>fn(studio,parts[3],input,{signal:abort.signal}));
+        if(!res.destroyed)json(res,201,result);
+      } finally {res.removeListener('close',cancel);}return true;
     }
     if(req.method==='GET'&&url.pathname==='/api/media/health') {
       const tools={};for(const name of ['ffmpeg','ffprobe'])try{tools[name]=(await runMedia(name,['-version'],{timeoutMs:5000})).split('\n')[0];}catch(e){tools[name]={error:e.message};}

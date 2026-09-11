@@ -1,3 +1,4 @@
+import {isPrepared709, COLOR_TAG_ARGS, PREPARED_YUV_SCALE} from '../public/color-contract.mjs';
 /** Asset-backed rough cuts in the existing timeline record, not a second timeline store. */
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -101,7 +102,8 @@ export function makeBridgeOtio(plan, filenames) {
 export function mediaPictureFilters(plan,clip,profile) {
   const sampling=clip.sampling||samplingFor(clip,plan.fps);
   const origin=rateValue(rational(sampling.origin,{zero:true}));
-  const scaling=clip.fit==='cover'?`scale=${plan.width}:${plan.height}:force_original_aspect_ratio=increase:force_divisible_by=2:flags=lanczos,crop=${plan.width}:${plan.height}`:`scale=${plan.width}:${plan.height}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos,pad=${plan.width}:${plan.height}:(ow-iw)/2:(oh-ih)/2`;
+  const levels=isPrepared709(profile)?PREPARED_YUV_SCALE:'';
+  const scaling=clip.fit==='cover'?`scale=${plan.width}:${plan.height}:force_original_aspect_ratio=increase:force_divisible_by=2:flags=lanczos${levels},crop=${plan.width}:${plan.height}`:`scale=${plan.width}:${plan.height}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos${levels},pad=${plan.width}:${plan.height}:(ow-iw)/2:(oh-ih)/2`;
   return `setpts=PTS-STARTPTS,trim=start=${origin},setpts=PTS-STARTPTS,fps=fps=${plan.fps}:start_time=0:round=near,trim=start_frame=${sampling.offsetFrames}:end_frame=${sampling.offsetFrames+clip.frames},setpts=PTS-STARTPTS,${scaling},setsar=1,format=yuv420p`;
 }
 /** Human-readable interchange companion. Neutralize spreadsheet formula prefixes. */
@@ -132,7 +134,7 @@ export async function renderMediaEdit(studio,projectId,{baseRevision,acknowledge
       await runMedia('ffmpeg',['-v','error','-nostdin','-threads','2',...decoderArgs,
         ...(p.kind==='image'?['-loop','1','-framerate',plan.fps]:[]),'-i',studio.assetPath(c.assetId),'-map',`0:${p.videoStream}`,
         '-vf',filters,'-r',plan.fps,'-fps_mode','cfr','-frames:v',String(c.frames),'-an','-c:v','libx264','-preset','fast','-crf','18','-threads','2','-filter_threads','1',
-        '-video_track_timescale',String(rational(plan.fps).n),'-map_metadata','-1','-movflags','+faststart',target],{timeoutMs:900000});
+        ...(isPrepared709(p)?COLOR_TAG_ARGS:[]),'-video_track_timescale',String(rational(plan.fps).n),'-map_metadata','-1','-movflags','+faststart',target],{timeoutMs:900000});
       const raw=JSON.parse(await runMedia('ffprobe',['-v','error','-count_frames','-select_streams','v:0','-show_streams','-of','json',target]));
       const v=raw.streams?.[0];
       if(Number(v?.nb_read_frames)!==c.frames||v.width!==plan.width||v.height!==plan.height||rateText(rational(v.avg_frame_rate))!==plan.fps){const e=Error('render_frame_contract');e.diagnostic={clipId:c.id,expected:{frames:c.frames,fps:plan.fps,width:plan.width,height:plan.height},actual:{frames:v?.nb_read_frames,fps:v?.avg_frame_rate,width:v?.width,height:v?.height}};throw e;}

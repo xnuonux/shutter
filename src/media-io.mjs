@@ -1,3 +1,4 @@
+import {isPrepared709, COLOR_TAG_ARGS, PREPARED_YUV_SCALE, PREPARED_REFERENCE_FILTER, SRGB_TAG_ARGS} from '../public/color-contract.mjs';
 /** Local media I/O. Originals are content-addressed; derived files never replace them. */
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -103,8 +104,8 @@ export async function probeMedia(filename, hint, { countFrames = false } = {}) {
   if ((!video && !audio.length) || (image && !video)) throw Error('unsupported_media');
   if (video && (!Number.isInteger(video.width) || !Number.isInteger(video.height) || video.width < 1 || video.height < 1 || video.width * video.height > 100e6)) throw Error('media_dimensions');
   const kind = image ? 'image' : video ? 'video' : 'audio';
-  const ext = image ? {jpeg:'jpg',tiff:'tiff'}[hint] || hint : hint === 'mov' ? (video ? 'mp4' : 'm4a') : hint === 'matroska' ? 'mkv' : hint === 'mpegts' ? 'mts' : hint;
-  const mime = image ? `image/${hint}` : kind === 'audio' ? ({wav:'audio/wav',aiff:'audio/aiff',flac:'audio/flac',mp3:'audio/mpeg',m4a:'audio/mp4'}[ext] || 'audio/x-matroska') : ({mp4:'video/mp4',mkv:'video/x-matroska',mts:'video/mp2t'}[ext]);
+  const ext = image ? {jpeg:'jpg',tiff:'tiff'}[hint] || hint : hint === 'mov' ? (video ? (video.codec_name === 'prores' ? 'mov' : 'mp4') : 'm4a') : hint === 'matroska' ? 'mkv' : hint === 'mpegts' ? 'mts' : hint;
+  const mime = image ? `image/${hint}` : kind === 'audio' ? ({wav:'audio/wav',aiff:'audio/aiff',flac:'audio/flac',mp3:'audio/mpeg',m4a:'audio/mp4'}[ext] || 'audio/x-matroska') : ({mp4:'video/mp4',mov:'video/quicktime',mkv:'video/x-matroska',mts:'video/mp2t'}[ext]);
   let fps = null;
   try { fps = rational(video?.avg_frame_rate); } catch { try { fps = rational(video?.r_frame_rate); } catch {} }
   const duration = Number(video?.duration || raw.format?.duration || audio[0]?.duration);
@@ -210,7 +211,8 @@ export async function deriveImage(studio, assetId, request) {
       }
       if(!Number.isSafeInteger(frame) || frame<0 || frame>1e7) throw Error('frame_index');
       filters.push(`select=eq(n\\,${frame})`);
-      recipe={operation:'decoded-frame',sourceAssetId:assetId,sourceSha256:asset.sha256,decodedFrameIndex:frame,colorPolicy:'unmanaged-reference'};
+      if(isPrepared709(p))filters.push(PREPARED_REFERENCE_FILTER);
+      recipe={operation:'decoded-frame',sourceAssetId:assetId,sourceSha256:asset.sha256,decodedFrameIndex:frame,colorPolicy:isPrepared709(p)?'prepared-rec709-to-srgb-reference':'unmanaged-reference'};
     } else {
       const e=request.adjustments || {};
       if(Object.keys(e).some(k=>!['crop','rotate','brightness','contrast','saturation'].includes(k))) throw Error('photo_adjustment_unsupported');
@@ -230,7 +232,7 @@ export async function deriveImage(studio, assetId, request) {
       recipe={operation:'photo-adjustment',sourceAssetId:assetId,sourceSha256:asset.sha256,adjustments:e,colorPolicy:'display-referred-unmanaged'};
     }
     await runMedia('ffmpeg',['-v','error','-nostdin','-threads','2',...decoderArgs,'-i',studio.assetPath(assetId),'-map',`0:${p.videoStream}`,
-      ...(filters.length?['-vf',filters.join(',')]:[]),'-frames:v','1','-fps_mode','vfr','-an','-c:v','png','-threads','1',output],{timeoutMs:600000});
+      ...(filters.length?['-vf',filters.join(',')]:[]),'-frames:v','1','-fps_mode','vfr','-an','-c:v','png','-threads','1',...(isPrepared709(p)?SRGB_TAG_ARGS:[]),output],{timeoutMs:600000});
     if(!fs.existsSync(output))throw Error('frame_outside_media');
     const result=await importMediaFile(studio,output,{name:asset.name+(asset.kind==='video'?' · frame':' · edit')+'.png',origin:'Non-destructive derived image'});
     const id='derivation_'+crypto.randomUUID();
@@ -255,12 +257,12 @@ export async function deriveVideoProxy(studio, assetId, request = {}) {
     const width = Math.max(2, 2 * Math.floor(w * scale / 2)), height = Math.max(2, 2 * Math.floor(h * scale / 2));
     await runMedia('ffmpeg', ['-v', 'error', '-nostdin', '-threads', '2', ...decoderArgs,
       '-i', studio.assetPath(assetId), '-map', `0:${p.videoStream}`, '-map', '0:a:0?',
-      '-vf', `scale=${width}:${height}:flags=lanczos,setsar=1`, '-fps_mode', 'vfr',
+      '-vf', `scale=${width}:${height}:flags=lanczos${isPrepared709(p)?PREPARED_YUV_SCALE:''},setsar=1`, '-fps_mode', 'vfr',
       '-c:v', 'libx264', '-preset', 'fast', '-crf', '22', '-pix_fmt', 'yuv420p', '-threads', '2',
-      '-c:a', 'aac', '-ac', '2', '-ar', '48000', '-b:a', '128k', '-map_metadata', '-1', '-movflags', '+faststart', output], {timeoutMs: 600000});
+      '-c:a', 'aac', '-ac', '2', '-ar', '48000', '-b:a', '128k', ...(isPrepared709(p)?COLOR_TAG_ARGS:[]), '-map_metadata', '-1', '-movflags', '+faststart', output], {timeoutMs: 600000});
     const result = await importMediaFile(studio, output, {name: asset.name + ' · viewing proxy.mp4', origin: 'Local browser viewing proxy; original retained'});
     const recipe = {operation: 'browser-proxy', sourceAssetId: assetId, sourceSha256: asset.sha256,
-      width, height, colorPolicy: 'unmanaged-sdr-viewing', timing: 'source-timestamps; not a frame-index interchange source'};
+      width, height, colorPolicy: isPrepared709(p)?'prepared-rec709-viewing':'unmanaged-sdr-viewing', timing: 'source-timestamps; not a frame-index interchange source'};
     const id = 'derivation_' + crypto.randomUUID();
     studio.write('media-derivation', {id, outputAssetId: result.id, recipe, createdAt: new Date().toISOString()});
     return {...result, derivationId: id, recipe};

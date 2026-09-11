@@ -6,12 +6,12 @@ import {decoderArgs, rational, rateText} from './media-io.mjs';
 
 /** Bounded streams, finite deadlines, no shell, cancellation; NOT an OS decoder sandbox. */
 export function inspectProcess(tool, args, {signal, timeoutMs = 900000, onLine,
-  maxBytes = 128 * 1024 * 1024, maxCapture = 4 * 1024 * 1024} = {}) {
+  maxBytes = 128 * 1024 * 1024, maxCapture = 4 * 1024 * 1024, cwd} = {}) {
   if (!['ffmpeg', 'ffprobe'].includes(tool)) throw Error('media_tool');
   if (signal?.aborted) return Promise.reject(Error('delivery_cancelled'));
   return new Promise((resolve, reject) => {
     const binary = process.env[tool === 'ffmpeg' ? 'SHUTTER_FFMPEG' : 'SHUTTER_FFPROBE'] || tool;
-    const child = spawn(binary, args, {shell:false, windowsHide:true, stdio:['ignore','pipe','pipe']});
+    const child = spawn(binary, args, {shell:false, windowsHide:true, stdio:['ignore','pipe','pipe'], cwd});
     let failure, bytes=0, capture='', stderr='', line='', settled=false;
     const decoder = new StringDecoder('utf8');
     const stop = message => { if (!failure) failure=Error(message); child.kill('SIGKILL'); };
