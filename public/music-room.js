@@ -1,3 +1,4 @@
+import {paintDraftText} from './text-room.js';
 import {soundIdentity} from './sound-edit.mjs';
 import {applyEdit, placements, totalFrames, clipAt, beatGrid, snapFrame, formatPosition, normalizeMarkers, asNumber, exact, MUSIC_SCHEMA} from './music-edit.mjs';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -14,7 +15,7 @@ export class MusicRoom {
       <div id="cut-inspector" class="cut-inspector"><p class="small">Select a shot to trim, slip or reframe. Picture edits do not move the song or its cues.</p></div>
       <details class="music-map"><summary>Song map · tempo, bars & cues</summary><div class="music-map-fields"><label>Tempo (quarter-note BPM)<input id="song-bpm" inputmode="decimal" value="120"></label><label>Beats per bar<input id="song-meter" type="number" min="1" max="12" value="4"></label><label>Beat unit<select id="song-unit"><option value="2">Half note</option><option value="4" selected>Quarter note</option><option value="8">Eighth note</option><option value="16">Sixteenth note</option></select></label><label>First beat (output frame)<input id="song-offset" type="number" min="0" value="0"></label><button id="song-apply" class="secondary">Apply song map</button><button id="song-align" class="secondary">First beat at playhead</button><button id="song-clear" class="secondary">Clear grid</button></div><p class="small">Use your FL Studio tempo or place the first beat by ear. The grid is explicit—not automatic beat detection. Cues stay on the song clock when picture moves.</p><div id="song-cues" class="cue-list"></div></details>
       <p class="small timeline-help">Space play/pause · ← → one frame · Shift+← → one second · S split · M cue. Source-rate browser preview is approximate; render the saved revision for export review.</p>`;
-    program.innerHTML=`<div class="section-title"><h2>Program</h2><span class="tag">LIVE DRAFT PREVIEW</span></div><div class="program-view viewer"><video id="cut-video" muted playsinline preload="metadata" hidden></video><img id="cut-image" alt="Selected picture in the cut" hidden><div id="cut-empty" class="small">Place your first shot. Keep your song.</div></div><audio id="cut-audio" preload="metadata"></audio><p id="program-note" class="small">Playback uses the original or a viewing proxy; exports use original media.</p>`;
+    program.innerHTML=`<div class="section-title"><h2>Program</h2><span class="tag">LIVE DRAFT PREVIEW</span></div><div class="program-view viewer"><video id="cut-video" muted playsinline preload="metadata" hidden></video><img id="cut-image" alt="Selected picture in the cut" hidden><div id="cut-empty" class="small">Place your first shot. Keep your song.</div></div><audio id="cut-audio" preload="metadata"></audio><p id="program-note" class="small">Playback uses the original or a viewing proxy. Draft text layout is approximate; use Finish to check an actual compositor frame.</p>`;
     this.$=s=>root.querySelector(s);this.video=program.querySelector('#cut-video');this.image=program.querySelector('#cut-image');this.audio=program.querySelector('#cut-audio');this.empty=program.querySelector('#cut-empty');this.canvas=this.$('#cut-canvas');
     const bind=(id,fn)=>this.$(id).addEventListener('click',()=>{if(!this.isBusy())this.safely(fn);});
     bind('#cut-play',()=>this.playing?this.pause():this.play());bind('#cut-home',()=>this.seek(0));bind('#cut-prev',()=>this.seek(this.frame-1));bind('#cut-next',()=>this.seek(this.frame+1));
@@ -152,6 +153,7 @@ export class MusicRoom {
   }
   showPicture(force=false){
     const edit=this.getEdit();if(!edit)return;
+    paintDraftText(this.program.querySelector('.program-view'),edit,this.frame);
     const c=this.frame<totalFrames(edit)?clipAt(edit,this.frame):null;
     if(!c){this.video.hidden=true;this.video.pause();this.image.hidden=true;this.empty.hidden=false;this.empty.textContent=edit.soundtrack?'No picture here. Your song continues.':'Place a shot to start the picture.';return;}
     const a=this.getState().assets.find(a=>a.id===c.assetId);if(!a)return;
