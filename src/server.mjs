@@ -1,3 +1,4 @@
+import {serveMediaAsset} from './media-stream.mjs';
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -221,30 +222,8 @@ export function createServer({ studio, renderer }) {
         fs.createReadStream(filename).pipe(res);
         return;
       }
-      if (req.method === "GET" && parts[0] === "media" && parts.length === 2) {
-        const asset = studio.read(parts[1], "asset"),
-          filename = studio.assetPath(asset.id);
-        const size = fs.statSync(filename).size;
-        res.setHeader("content-type", asset.mime);
-        res.setHeader("cache-control", "private, max-age=31536000, immutable");
-        res.setHeader("accept-ranges", "bytes");
-        let start = 0,
-          end = size - 1;
-        if (req.headers.range) {
-          const match = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range);
-          if (!match) return res.writeHead(416).end();
-          start = Number(match[1]);
-          end = match[2] ? Math.min(Number(match[2]), end) : end;
-          if (start > end || start >= size)
-            return res
-              .writeHead(416, { "content-range": "bytes */" + size })
-              .end();
-          res.statusCode = 206;
-          res.setHeader("content-range", `bytes ${start}-${end}/${size}`);
-        }
-        res.setHeader("content-length", end - start + 1);
-        fs.createReadStream(filename, { start, end }).pipe(res);
-        return;
+      if (['GET','HEAD'].includes(req.method) && parts[0] === 'media' && parts.length === 2) {
+        await serveMediaAsset(studio,req,res,parts[1]);return;
       }
       const files = {
         "/": ["index.html", "text/html"],

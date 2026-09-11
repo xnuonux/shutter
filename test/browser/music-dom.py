@@ -8,7 +8,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'verification';OUT.mkdir(exist_ok=True)
-source={name:(ROOT/'public'/name).read_text() for name in ['music-edit.mjs','edit-recovery.mjs','music-room.js','media-studio.js','media-studio.html','media-studio.css','music-room.css','sound-edit.mjs','sound-room.js','sound-room.css','delivery-contract.mjs','delivery-room.js','delivery-room.css','color-contract.mjs','color-room.js','color-room.css','text-edit.mjs','text-room.js','text-room.css']}
+source={name:(ROOT/'public'/name).read_text() for name in ['media-health-room.js','media-health-room.css','music-edit.mjs','edit-recovery.mjs','music-room.js','media-studio.js','media-studio.html','media-studio.css','music-room.css','sound-edit.mjs','sound-room.js','sound-room.css','delivery-contract.mjs','delivery-room.js','delivery-room.css','color-contract.mjs','color-room.js','color-room.css','text-edit.mjs','text-room.js','text-room.css']}
 html=re.sub(r'<script\b[^>]*>.*?</script>|<link\b[^>]*>', '', source['media-studio.html'],flags=re.S)
 assets=[dict(id='asset_'+str(i)*64,name=name,kind=kind,mime=mime,bytes=300000,media=dict(kind=kind,width=640,height=360,duration=10,audio=[dict(index=0,sampleRate=48000,bits=24,channels=2)] if kind=='audio' else [],fps=dict(n=24,d=1))) for i,name,kind,mime in [(1,'Night performance.mp4','video','video/mp4'),(2,'Moonlight closeup.mp4','video','video/mp4'),(3,'Finished master.wav','audio','audio/wav'),(4,'Cover portrait.png','image','image/png')]]
 timeline=dict(format='shutter-media-edit-v1',fps='24',width=1920,height=1080,clips=[dict(id='shot_'+str(i),assetId=assets[i-1]['id'],sourceStart='0',frames=48,fit='contain') for i in [1,2]]+[dict(id='photo',assetId=assets[3]['id'],sourceStart='0',frames=48,fit='cover')],soundtrack=dict(assetId=assets[2]['id'],tailPolicy='pad-silence'),colorPolicy='unmanaged-sdr',audioPolicy='soundtrack-or-silence',cadencePolicy='wallclock-nearest',music=dict(schema='shutter-music-map-v1',bpm='96',beatsPerBar=4,beatUnit=4,offsetFrames=0),markers=[dict(id='chorus',frame=72,label='First chorus',kind='chorus')])
@@ -46,7 +46,7 @@ with sync_playwright() as p:
  return {ok:true,status:200,json:async()=>structuredClone(data)};
  };
  }''',dict(state=state,record=record,wave=wave))
- namespaces={'text-edit.mjs':'TestText','text-room.js':'TestTextRoom','color-contract.mjs':'TestColorContract','color-room.js':'TestColorRoom','music-edit.mjs':'TestEdit','edit-recovery.mjs':'TestRecovery','sound-edit.mjs':'TestSound','music-room.js':'TestRoom','sound-room.js':'TestSoundRoom','delivery-contract.mjs':'TestDeliveryContract','delivery-room.js':'TestDeliveryRoom'}
+ namespaces={'media-health-room.js':'TestMediaHealthRoom','text-edit.mjs':'TestText','text-room.js':'TestTextRoom','color-contract.mjs':'TestColorContract','color-room.js':'TestColorRoom','music-edit.mjs':'TestEdit','edit-recovery.mjs':'TestRecovery','sound-edit.mjs':'TestSound','music-room.js':'TestRoom','sound-room.js':'TestSoundRoom','delivery-contract.mjs':'TestDeliveryContract','delivery-room.js':'TestDeliveryRoom'}
  def local_imports(text):
   for file,namespace in namespaces.items():
    text=re.sub(r"import \{([^}]+)\} from './"+re.escape(file)+r"';",r'const {\1}=window.'+namespace+';',text)
@@ -56,7 +56,7 @@ with sync_playwright() as p:
   module=local_imports(source[filename]).replace('export ','')
   page.evaluate('window.'+namespace+'=(()=>{'+module+';return {'+','.join(exports)+'};})()')
  main=local_imports(source['media-studio.js'])
- main+='\nwindow.fixtureApi={room,soundRoom,textRoom,loadProject,offerRecovery,getDraft:()=>draft,getRecord:()=>record};'
+ main+='\nwindow.fixtureApi={room,soundRoom,textRoom,mediaHealthRoom,loadProject,offerRecovery,getDraft:()=>draft,getRecord:()=>record};'
  page.evaluate('(async()=>{'+main+'})()')
  page.evaluate("fixtureApi.loadProject('demo')")
  def check(name,expression):
