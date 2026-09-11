@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import {compileSoundStage, renderSoundStage, deliveryAudioFile, checkSoundBudget} from './media-sound.mjs';
+import {soundIdentity, SOUND_POLICY} from '../public/sound-edit.mjs';
 import {writeBridgeZip} from './media-zip.mjs';
 import { normalizeMusic, normalizeMarkers, samplingFor } from '../public/music-edit.mjs';
 import { rational, rateText, rateValue, frameSamples, getMediaProfile, verifyMediaAsset, ensureMediaProfile, runMedia, decoderArgs, importMediaFile, fileDigest } from './media-io.mjs';
@@ -23,7 +25,7 @@ export function compileMediaEdit(studio,projectId,edit) {
   if(rateValue(fps)<1||rateValue(fps)>120)throw Error('media_edit_rate');
   const {width,height}=edit;
   if(![width,height].every(n=>Number.isSafeInteger(n)&&n>=16&&n<=4096&&n%2===0)||width*height>4096*2160)throw Error('media_edit_dimensions');
-  if(edit.colorPolicy!=='unmanaged-sdr'||edit.audioPolicy!=='soundtrack-or-silence'||edit.cadencePolicy!=='wallclock-nearest')throw Error('media_edit_policy');
+  if(edit.colorPolicy!=='unmanaged-sdr'||!['soundtrack-or-silence',SOUND_POLICY].includes(edit.audioPolicy)||edit.cadencePolicy!=='wallclock-nearest')throw Error('media_edit_policy');
   const music=normalizeMusic(edit.music), markers=normalizeMarkers(edit.markers);
   const ids=new Set(), sources=new Map(), warnings=new Set(['SDR rough-cut renderer: no log-to-display, HDR, ICC or creative grading transform.', 'Camera audio is excluded. Only the selected master track plays, or silence when no track is selected.']);
   let frames=0;
@@ -60,9 +62,13 @@ export function compileMediaEdit(studio,projectId,edit) {
     sources.set(asset.id,{assetId:asset.id,sha256:asset.sha256,kind:'audio',media});
   }
   if(markers.some(m=>m.frame>=frames))warnings.add('Some cue markers are outside the current picture duration. They remain fixed on the song clock.');
-  const plan={version:5,format:MEDIA_EDIT_FORMAT,projectId,title:production.title,fps:rateText(fps),width,height,frames,
-    duration:frames/rateValue(fps),audioSamples:frameSamples(frames,fps),sampleRate:48000,
-    clips,soundtrack,music,markers,sources:[...sources.values()],takes:[],audioStreams:soundtrack?1:0,
+  const audioSamples=frameSamples(frames,fps);
+  const soundStage=compileSoundStage(studio,edit,sources,warnings,audioSamples);
+  if(soundStage)warnings.delete('Camera audio is excluded. Only the selected master track plays, or silence when no track is selected.');
+  const plan={version:soundStage?6:5,format:MEDIA_EDIT_FORMAT,projectId,title:production.title,fps:rateText(fps),width,height,frames,
+    duration:frames/rateValue(fps),audioSamples,sampleRate:48000,
+    clips,soundtrack,music,markers,sources:[...sources.values()],takes:[],audioStreams:soundStage||soundtrack?1:0,
+    ...(soundStage?{soundStage,soundIdentity:soundIdentity(edit)}:{}),
     colorPolicy:edit.colorPolicy,audioPolicy:edit.audioPolicy,cadencePolicy:edit.cadencePolicy,warnings:[...warnings]};
   return plan;
 }
@@ -75,17 +81,18 @@ export function xmlEscape(v) { return String(v).replace(/[<>&"']/g,c=>({'<':'&lt
 /** Conformed-source FCP7 XML. Import/relink must still be tested inside Resolve. */
 export function makeBridgeXml(plan,filenames) {
   if(filenames.length!==plan.clips.length)throw Error('bridge_files');
-  const rate=rateXml(plan.fps);
+  const rate=rateXml(plan.fps),audioName=deliveryAudioFile(plan);
   const video=plan.clips.map((c,i)=>`<clipitem id="clip-${i}"><name>${xmlEscape(filenames[i])}</name>${rate}<start>${c.at}</start><end>${c.at+c.frames}</end><in>0</in><out>${c.frames}</out><duration>${c.frames}</duration><file id="file-${i}"><name>${xmlEscape(filenames[i])}</name><pathurl>${xmlEscape(filenames[i])}</pathurl>${rate}<duration>${c.frames}</duration><media><video><samplecharacteristics><width>${plan.width}</width><height>${plan.height}</height><pixelaspectratio>square</pixelaspectratio>${rate}</samplecharacteristics></video></media></file></clipitem>`).join('');
-  const audio=plan.soundtrack?`<audio><numOutputChannels>2</numOutputChannels>${[1,2].map(channel=>`<track><clipitem id="audio-${channel}"><name>master-48k.wav</name>${rate}<start>0</start><end>${plan.frames}</end><in>0</in><out>${plan.frames}</out><file id="audio-file-${channel}"><name>master-48k.wav</name><pathurl>master-48k.wav</pathurl>${rate}<duration>${plan.frames}</duration><media><audio><samplecharacteristics><depth>24</depth><samplerate>48000</samplerate></samplecharacteristics><channelcount>2</channelcount></audio></media></file><sourcetrack><mediatype>audio</mediatype><trackindex>${channel}</trackindex></sourcetrack></clipitem></track>`).join('')}</audio>`:'';
+  const audio=audioName?`<audio><numOutputChannels>2</numOutputChannels>${[1,2].map(channel=>`<track><clipitem id="audio-${channel}"><name>${audioName}</name>${rate}<start>0</start><end>${plan.frames}</end><in>0</in><out>${plan.frames}</out><file id="audio-file-${channel}"><name>${audioName}</name><pathurl>${audioName}</pathurl>${rate}<duration>${plan.frames}</duration><media><audio><samplecharacteristics><depth>24</depth><samplerate>48000</samplerate></samplecharacteristics><channelcount>2</channelcount></audio></media></file><sourcetrack><mediatype>audio</mediatype><trackindex>${channel}</trackindex></sourcetrack></clipitem></track>`).join('')}</audio>`:'';
   return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="5"><sequence id="shutter-cut"><name>${xmlEscape(plan.title)}</name><duration>${plan.frames}</duration>${rate}<timecode>${rate}<string>00:00:00:00</string><frame>0</frame><displayformat>NDF</displayformat></timecode><media><video><format><samplecharacteristics><width>${plan.width}</width><height>${plan.height}</height><pixelaspectratio>square</pixelaspectratio>${rate}</samplecharacteristics></format><track>${video}</track></video>${audio}</media>${(plan.markers||[]).filter(m=>m.frame<plan.frames).map(m=>`<marker><name>${xmlEscape(m.label)}</name><comment>${xmlEscape(m.kind)}</comment><in>${m.frame}</in><out>-1</out></marker>`).join('')}</sequence></xmeml>\n`;
 }
 export function makeBridgeOtio(plan, filenames) {
+  const audioName=deliveryAudioFile(plan);
   const fps=rateValue(rational(plan.fps)), time=(value,rate)=>({OTIO_SCHEMA:'RationalTime.1',value,rate});
   const range=(frames,rate)=>({OTIO_SCHEMA:'TimeRange.1',start_time:time(0,rate),duration:time(frames,rate)});
   const reference=(file,frames,rate)=>({OTIO_SCHEMA:'ExternalReference.1',target_url:file,available_range:range(frames,rate),metadata:{}});
   const tracks=[{OTIO_SCHEMA:'Track.1',name:'Picture (conformed)',kind:'Video',children:plan.clips.map((c,i)=>({OTIO_SCHEMA:'Clip.2',name:filenames[i],source_range:range(c.frames,fps),media_references:{DEFAULT_MEDIA:reference(filenames[i],c.frames,fps)},active_media_reference_key:'DEFAULT_MEDIA',effects:[],markers:[],metadata:{shutter:{sourceAssetId:c.assetId,sourceStart:c.sourceStart,fit:c.fit}}})),effects:[],markers:[],metadata:{}}];
-  if(plan.soundtrack)tracks.push({OTIO_SCHEMA:'Track.1',name:'Master',kind:'Audio',children:[{OTIO_SCHEMA:'Clip.2',name:'Master 48 kHz',source_range:range(plan.audioSamples,48000),media_references:{DEFAULT_MEDIA:reference('master-48k.wav',plan.audioSamples,48000)},active_media_reference_key:'DEFAULT_MEDIA',effects:[],markers:[],metadata:{}}],effects:[],markers:[],metadata:{}});
+  if(audioName)tracks.push({OTIO_SCHEMA:'Track.1',name:plan.soundStage?'Sound Stage mix':'Master',kind:'Audio',children:[{OTIO_SCHEMA:'Clip.2',name:plan.soundStage?'Sound Stage mix 48 kHz':'Master 48 kHz',source_range:range(plan.audioSamples,48000),media_references:{DEFAULT_MEDIA:reference(audioName,plan.audioSamples,48000)},active_media_reference_key:'DEFAULT_MEDIA',effects:[],markers:[],metadata:{}}],effects:[],markers:[],metadata:{}});
   return {OTIO_SCHEMA:'Timeline.1',name:plan.title,global_start_time:time(0,fps),tracks:{OTIO_SCHEMA:'Stack.1',name:'Tracks',children:tracks,effects:[],markers:(plan.markers||[]).filter(m=>m.frame<plan.frames).map(m=>({OTIO_SCHEMA:'Marker.2',name:m.label,color:m.kind==='chorus'?'RED':'GREEN',marked_range:{OTIO_SCHEMA:'TimeRange.1',start_time:time(m.frame,fps),duration:time(1,fps)},metadata:{shutter:{id:m.id,kind:m.kind}}})),metadata:{}},metadata:{shutter:{planHash:plan.hash,bridge:'conformed-rough-cut',fpsExact:plan.fps}}};
 }
 
@@ -113,6 +120,7 @@ export async function renderMediaEdit(studio,projectId,{baseRevision,acknowledge
   if(!plan.frames)throw Error('media_edit_empty');
   // Do not start a lengthy render that cannot produce its requested interchange package.
   rateXml(plan.fps);
+  checkSoundBudget(plan);
   for(const s of plan.sources)await verifyMediaAsset(studio,s.assetId);
   const base=path.join(studio.root,'media-renders');await fsp.mkdir(base,{recursive:true});
   const folder=await fsp.mkdtemp(path.join(base,'cut-')), files=[], mediaFiles=[];
@@ -135,7 +143,12 @@ export async function renderMediaEdit(studio,projectId,{baseRevision,acknowledge
     const silent=path.join(folder,'picture.mp4');
     await runMedia('ffmpeg',['-v','error','-nostdin','-f','concat','-safe','1','-i',concat,'-map','0:v:0','-c','copy','-movflags','+faststart',silent],{timeoutMs:900000});
     const output=path.join(folder,'preview.mp4');
-    if(plan.soundtrack) {
+    let soundFiles=[];
+    if(plan.soundStage) {
+      const result=await renderSoundStage(studio,plan,folder);
+      soundFiles=result.bridgeFiles;mediaFiles.push(...result.files);
+      await runMedia('ffmpeg',['-v','error','-nostdin','-i',silent,'-i',path.join(folder,result.mixName),'-map','0:v:0','-map','1:a:0','-c:v','copy','-c:a','aac','-b:a','320k','-movflags','+faststart',output],{timeoutMs:900000});
+    } else if(plan.soundtrack) {
       const wave=path.join(folder,'master-48k.wav');
       await runMedia('ffmpeg',['-v','error','-nostdin',...decoderArgs,'-i',studio.assetPath(plan.soundtrack.assetId),'-map',`0:${plan.soundtrack.sourceStream}`,
         '-af',`asetpts=PTS-STARTPTS,aresample=48000,apad=whole_len=${plan.audioSamples},atrim=end_sample=${plan.audioSamples}`,
@@ -156,7 +169,7 @@ export async function renderMediaEdit(studio,projectId,{baseRevision,acknowledge
     await fsp.writeFile(path.join(folder,'cues.csv'),makeCueCsv(plan));
     await fsp.writeFile(path.join(folder,'manifest.json'),JSON.stringify({format:'shutter-bridge-v1',revision:record.revision,plan,files:mediaFiles,
       limitations:['Conformed H.264 rough-cut media, not camera-original grading handles.','Relative interchange paths require relinking the included media in the target editor.','Resolve/OTIO application import has not been certified.','No native FLP/DRP/PSD round-trip.','Original song is unchanged; included 48 kHz PCM is a derived, aligned delivery track.']},null,2)+'\n');
-    const bridgeFiles=[...files,...(plan.soundtrack?['master-48k.wav']:[]),'timeline.xml','timeline.otio','cues.csv','manifest.json'];
+    const bridgeFiles=[...files,...(plan.soundStage?soundFiles:plan.soundtrack?['master-48k.wav']:[]),'timeline.xml','timeline.otio','cues.csv','manifest.json'];
     const hasZip=await writeBridgeZip(folder,bridgeFiles,path.join(folder,'shutter-handoff.zip'));
     const cut=studio.write('cut',{id:'cut_'+crypto.randomUUID(),projectId,output:asset.id,plan,revision:record.revision,
       bridgeFolder:path.basename(folder),bridgeFiles:hasZip?[...bridgeFiles,'shutter-handoff.zip']:bridgeFiles,zipStatus:hasZip?'ready':'zip64_required-use-individual-files',createdAt:new Date().toISOString()});

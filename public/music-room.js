@@ -1,3 +1,4 @@
+import {soundIdentity} from './sound-edit.mjs';
 import {applyEdit, placements, totalFrames, clipAt, beatGrid, snapFrame, formatPosition, normalizeMarkers, asNumber, exact, MUSIC_SCHEMA} from './music-edit.mjs';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=prefix=>prefix+'_'+crypto.randomUUID();
@@ -54,7 +55,7 @@ export class MusicRoom {
     };document.addEventListener('keydown',this.onKey);
     document.addEventListener('visibilitychange',()=>{if(document.hidden)this.pause();});
     this.audio.addEventListener('ended',()=>{if(this.playing)this.anchor={seconds:this.audio.duration,wall:performance.now()};});
-    this.audio.addEventListener('error',()=>{if(this.playing){this.pause();this.notify('This browser could not play the master. The source is unchanged; use a supported WAV for monitoring.');}});
+    this.audio.addEventListener('error',()=>{if(this.playing){this.pause();this.notify('This browser could not play the selected audio. The source is unchanged; use a supported WAV for monitoring.');}});
     this.video.addEventListener('error',()=>{program.querySelector('#program-note').textContent='Picture playback unavailable in this browser. Make a viewing proxy from the source; no source file was changed.';});
     this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(this.$('#cut-scroll'));
   }
@@ -63,7 +64,8 @@ export class MusicRoom {
   command(command){this.pause();const next=applyEdit(this.getEdit(),command,this.profiles());this.onEdit(next);}
   fps(){return asNumber(exact(this.getEdit()?.fps||'24'));}
   duration(){return totalFrames(this.getEdit())/this.fps();}
-  playEnd(){const song=this.getState().assets.find(a=>a.id===this.getEdit().soundtrack?.assetId);return Math.max(totalFrames(this.getEdit()),Math.ceil((song?.media?.duration||0)*this.fps()));}
+  monitorId(){const e=this.getEdit();return e?.soundStage?this.getState().listeningMixes?.findLast(m=>m.projectId===this.projectKey&&m.identity===soundIdentity(e))?.assetId||null:e?.soundtrack?.assetId||null;}
+  playEnd(){if(this.getEdit().soundStage)return totalFrames(this.getEdit());const song=this.getState().assets.find(a=>a.id===this.getEdit().soundtrack?.assetId);return Math.max(totalFrames(this.getEdit()),Math.ceil((song?.media?.duration||0)*this.fps()));}
   point(e){const r=this.canvas.getBoundingClientRect(),f=Math.round(Math.max(0,Math.min(r.width,e.clientX-r.left))/r.width*this.extent());return {frame:this.$('#cut-snap').checked?snapFrame(this.getEdit(),f,Math.max(1,Math.round(6/r.width*this.extent()))>120?120:Math.max(1,Math.round(6/r.width*this.extent()))):f,y:e.clientY-r.top};}
   extent(){const edit=this.getEdit();if(!edit)return 120;const song=this.getState().assets.find(a=>a.id===edit.soundtrack?.assetId);return Math.min(120*14400,Math.max(totalFrames(edit),Math.ceil((song?.media?.duration||0)*this.fps()),Math.ceil(5*this.fps())));}
   update(projectKey){
@@ -77,7 +79,8 @@ export class MusicRoom {
     for(const b of this.root.querySelectorAll('[data-cue]'))b.onclick=()=>{const m=edit.markers.find(m=>m.id===b.dataset.cue);this.seek(m.frame);};
     for(const b of this.root.querySelectorAll('[data-delete-cue]'))b.onclick=()=>this.safely(()=>this.command({type:'marker-remove',markerId:b.dataset.deleteCue}));
     const id=edit.soundtrack?.assetId||null;
-    if(this.audio.dataset.asset!==String(id)){this.audio.pause();this.audio.dataset.asset=String(id);if(id)this.audio.src='/media/'+id;else{this.audio.removeAttribute('src');this.audio.load();}}
+    const monitor=this.monitorId();
+    if(this.audio.dataset.asset!==String(monitor)){this.audio.pause();this.audio.dataset.asset=String(monitor);if(monitor)this.audio.src='/media/'+monitor;else{this.audio.removeAttribute('src');this.audio.load();}}
     if(this.waveAsset!==id){this.waveAsset=id;this.wave=null;const token=++this.request;this.$('#wave-label').textContent=id?'MASTER · build waveform to see the song':'MASTER · no song selected';if(id)this.api(`/api/media/assets/${id}/waveform`).then(w=>{if(token===this.request){this.wave=w;this.draw();this.$('#wave-label').textContent='MASTER · channel-separated waveform';}}).catch(()=>{});}
     this.$('#build-waveform').disabled=!id;this.inspector();this.resize();this.showPicture();this.positionLabel();
   }
@@ -121,25 +124,26 @@ export class MusicRoom {
   positionLabel(){this.$('#cut-position').textContent=formatPosition(this.frame,this.getEdit().fps);this.$('#cut-frame').textContent=`frame ${this.frame} / ${totalFrames(this.getEdit())}`;this.$('#cut-play').textContent=this.playing?'Pause':'Play';}
   seek(frame){
     const edit=this.getEdit();if(!edit)return;this.frame=Math.max(0,Math.min(this.extent(),Math.round(frame)));const sec=this.frame/this.fps();this.anchor={seconds:sec,wall:performance.now()};
-    if(edit.soundtrack){try{this.audio.currentTime=Math.min(sec,Number.isFinite(this.audio.duration)?this.audio.duration:sec);}catch{}if(this.playing&&sec<this.audio.duration)this.audio.play().catch(()=>this.pause());else this.audio.pause();}
+    if(this.monitorId()){try{this.audio.currentTime=Math.min(sec,Number.isFinite(this.audio.duration)?this.audio.duration:sec);}catch{}if(this.playing&&sec<this.audio.duration)this.audio.play().catch(()=>this.pause());else this.audio.pause();}
     this.showPicture(true);this.positionLabel();this.draw();
   }
   async play(){
+    if(this.getEdit().soundStage&&!this.monitorId())throw Error('Save & build the current listening mix in Sound Stage before playback.');
     if(!totalFrames(this.getEdit())&&!this.getEdit().soundtrack)throw Error('Add your song or a shot before playing.');
     if(this.frame>=this.playEnd())this.seek(0);
     const loop=placements(this.getEdit()).find(c=>c.id===this.selected);if(this.$('#cut-loop').checked&&loop&&(this.frame<loop.at||this.frame>=loop.end))this.seek(loop.at);
     const source=this.program.ownerDocument.querySelector('#source-view video, #source-view audio');source?.pause();
     this.anchor={seconds:this.frame/this.fps(),wall:performance.now()};
-    if(this.getEdit().soundtrack&&(!Number.isFinite(this.audio.duration)||this.anchor.seconds<this.audio.duration)){
+    if(this.monitorId()&&(!Number.isFinite(this.audio.duration)||this.anchor.seconds<this.audio.duration)){
       this.audio.currentTime=this.anchor.seconds;
-      try{await this.audio.play();}catch{throw Error('Master playback unavailable. Try a supported WAV or check browser audio permissions.');}
+      try{await this.audio.play();}catch{throw Error('Sound playback unavailable. Try a supported WAV or check browser audio permissions.');}
     }
     this.playing=true;this.showPicture();this.positionLabel();this.tick();
   }
   pause(){this.playing=false;this.audio.pause();this.video.pause();cancelAnimationFrame(this.animation);if(this.getEdit())this.positionLabel();}
   tick(){
     if(!this.playing)return;
-    const seconds=this.getEdit().soundtrack&&!this.audio.ended&&!this.audio.paused?this.audio.currentTime:this.anchor.seconds+(performance.now()-this.anchor.wall)/1000;
+    const seconds=this.monitorId()&&!this.audio.ended&&!this.audio.paused?this.audio.currentTime:this.anchor.seconds+(performance.now()-this.anchor.wall)/1000;
     this.frame=Math.floor(seconds*this.fps()+1e-7);
     const selected=placements(this.getEdit()).find(c=>c.id===this.selected);
     if(this.$('#cut-loop').checked&&selected&&this.frame>=selected.end){this.seek(selected.at);}

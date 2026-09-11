@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#141417"><title>Shutter · Camera & music</title><link rel="stylesheet" href="/media-studio.css"><link rel="stylesheet" href="/music-room.css"><script type="module" src="/media-studio.js"></script></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#141417"><title>Shutter · Camera & music</title><link rel="stylesheet" href="/media-studio.css"><link rel="stylesheet" href="/music-room.css"><link rel="stylesheet" href="/sound-room.css"><script type="module" src="/media-studio.js"></script></head>
 <body>
 <header><a class="brand" href="/">SHUTTER<span>YOUR PRODUCTION, CONNECTED</span></a><nav><a href="/">Direct / Canvas</a><span aria-current="page">Music Cut</span></nav><span class="tag">LOCAL · EXPERIMENTAL</span></header>
 <main>
@@ -12,8 +12,8 @@
 <div class="dual-viewers"><section class="panel viewer-panel"><div class="section-title"><h2 id="source-title">Choose your material</h2><span id="source-kind" class="tag">SOURCE VIEW</span></div><div id="source-view" class="viewer empty">A camera shot, a photograph, a finished song.<br>It all starts here.</div><div id="source-details" class="small"></div><div id="source-actions"></div></section><section id="program-host" class="panel program-panel"></section></div>
 <section id="edit-panel" class="panel"><div class="section-title"><div><p class="eyebrow">THE ASSEMBLY</p><h2 id="project-title">Start a production above</h2></div><span id="revision" class="tag">NO SAVED CUT</span></div>
 <div id="recovery-notice" class="notice" hidden></div><div id="editing" hidden><div class="settings"><label>Frame rate<select id="fps"><option>24000/1001</option><option>24</option><option>25</option><option>30000/1001</option><option>30</option><option>50</option><option>60000/1001</option><option>60</option></select></label><label>Width<input id="width" type="number" min="16" max="4096" step="2"></label><label>Height<input id="height" type="number" min="16" max="4096" step="2"></label></div>
-<label>Mastered song / soundtrack<select id="soundtrack"></select></label><p class="small">The master stays at zero. Picture edits and cues do not move it. Camera audio is excluded. Exports trim or pad the song to picture; the original WAV remains unchanged.</p>
-<section id="music-room"></section><details class="numeric-edit"><summary>Detailed shot list</summary><div id="clips" class="clip-list"></div></details><p id="duration" class="small"></p>
+<label>Mastered song / soundtrack<select id="soundtrack"></select></label><p class="small">The master stays at zero. Picture edits and cues do not move it. Camera audio stays excluded unless you deliberately place a stream in Sound Stage. Exports trim or pad the song to picture; the original WAV remains unchanged.</p>
+<section id="music-room"></section><section id="sound-room" aria-label="Sound Stage"></section><details class="numeric-edit"><summary>Detailed shot list</summary><div id="clips" class="clip-list"></div></details><p id="duration" class="small"></p>
 <div class="action-row"><button id="save">Save cut</button><button id="undo" class="secondary">Undo</button><button id="redo" class="secondary">Redo</button></div>
 <div class="render-controls"><label class="check"><input id="color-consent" type="checkbox">I have reviewed source color. This rough-cut renderer does not grade S-Log, HDR or ICC images. Known HDR is blocked.</label><button id="render">Render & prepare handoff ↗</button></div></div></section>
 <section id="delivery" class="panel" hidden></section>
