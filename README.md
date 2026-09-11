@@ -1,5 +1,11 @@
 # Shutter
 
+## Product vision · September 11, 2026
+
+**Start with [SHUTTER — The Vision](VISION.md): the founder-approved direction for `shutter.video`.** The [complete original vision message](docs/vision/2026-09-11-original-message.md) is preserved separately. Production Memory, Generative Inserts and Take Stacks define the next pivotal product experience; the vision is a direction, not a claim that planned features are shipped.
+
+The implementation checkpoint and historical prototype notes below remain distinct from that long-term ambition.
+
 ## Current product map · September 10, 2026
 
 Start with [the product blueprint](docs/product-blueprint.md) for the complete direction and build order, and [the current checkpoint](docs/current-checkpoint.md) for implemented behaviour. The local studio now has Direct, Canvas and Edit, paid H3 Max integration, and a source-range/coverage timeline. The blueprint distinguishes these working foundations from planned general media editing, sound, Pixel orchestration and workflow execution.
