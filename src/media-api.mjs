@@ -1,3 +1,4 @@
+import {checkMediaHealth,restoreMissingAsset} from './media-recovery.mjs';
 import {applyTextEdit} from '../public/text-edit.mjs';
 import {importColorLut, previewColor, prepareColor} from './media-color.mjs';
 import {checkDelivery} from './media-delivery.mjs';
@@ -26,13 +27,23 @@ export function createMediaProduction(studio,input) {
 }
 /** Invoke only after the parent server's localhost/Origin/Sec-Fetch-Site gate. */
 export async function handleMediaRequest(studio,req,res,url) {
-  const staticFiles={'/text-edit.mjs':['text-edit.mjs','text/javascript'],'/text-room.js':['text-room.js','text/javascript'],'/text-room.css':['text-room.css','text/css'],'/color-contract.mjs':['color-contract.mjs','text/javascript'],'/color-room.js':['color-room.js','text/javascript'],'/color-room.css':['color-room.css','text/css'],'/delivery-contract.mjs':['delivery-contract.mjs','text/javascript'],'/delivery-room.js':['delivery-room.js','text/javascript'],'/delivery-room.css':['delivery-room.css','text/css'],'/sound-edit.mjs':['sound-edit.mjs','text/javascript'],'/sound-room.js':['sound-room.js','text/javascript'],'/sound-room.css':['sound-room.css','text/css'],'/music-edit.mjs':['music-edit.mjs','text/javascript'],'/music-room.js':['music-room.js','text/javascript'],'/music-room.css':['music-room.css','text/css'],'/edit-recovery.mjs':['edit-recovery.mjs','text/javascript'],'/media-studio':['media-studio.html','text/html'],'/media-studio.js':['media-studio.js','text/javascript'],'/media-studio.css':['media-studio.css','text/css']};
+  const staticFiles={'/media-health-room.js':['media-health-room.js','text/javascript'],'/media-health-room.css':['media-health-room.css','text/css'],'/text-edit.mjs':['text-edit.mjs','text/javascript'],'/text-room.js':['text-room.js','text/javascript'],'/text-room.css':['text-room.css','text/css'],'/color-contract.mjs':['color-contract.mjs','text/javascript'],'/color-room.js':['color-room.js','text/javascript'],'/color-room.css':['color-room.css','text/css'],'/delivery-contract.mjs':['delivery-contract.mjs','text/javascript'],'/delivery-room.js':['delivery-room.js','text/javascript'],'/delivery-room.css':['delivery-room.css','text/css'],'/sound-edit.mjs':['sound-edit.mjs','text/javascript'],'/sound-room.js':['sound-room.js','text/javascript'],'/sound-room.css':['sound-room.css','text/css'],'/music-edit.mjs':['music-edit.mjs','text/javascript'],'/music-room.js':['music-room.js','text/javascript'],'/music-room.css':['music-room.css','text/css'],'/edit-recovery.mjs':['edit-recovery.mjs','text/javascript'],'/media-studio':['media-studio.html','text/html'],'/media-studio.js':['media-studio.js','text/javascript'],'/media-studio.css':['media-studio.css','text/css']};
   if(req.method==='GET'&&staticFiles[url.pathname]) {
     const [name,type]=staticFiles[url.pathname];res.writeHead(200,{'content-type':type,'cache-control':'no-cache'});res.end(await fsp.readFile(path.join(publicRoot,name)));return true;
   }
   if(!url.pathname.startsWith('/api/media/'))return false;
   const parts=url.pathname.split('/').filter(Boolean);
   try {
+    if(req.method==='POST'&&parts.length===5&&((parts[2]==='productions'&&parts[4]==='media-health')||(parts[2]==='assets'&&parts[4]==='restore'))) {
+      const abort=new AbortController(),cancel=()=>{if(!res.writableEnded)abort.abort();};res.once('close',cancel);
+      if(res.destroyed)abort.abort();
+      try {
+        let result;
+        if(parts[4]==='media-health') {const input=await body(req);result=await mediaExclusive(studio,()=>checkMediaHealth(studio,parts[3],input,{signal:abort.signal}));}
+        else result=await mediaExclusive(studio,()=>restoreMissingAsset(studio,parts[3],req,{recordKey:url.searchParams.get('recordKey'),signal:abort.signal}));
+        if(!res.destroyed)json(res,201,result);
+      } finally {res.removeListener('close',cancel);}return true;
+    }
     if(req.method==='GET'&&url.pathname==='/api/media/state') {
       const timelines=studio.list('timeline').filter(r=>r.timeline?.format===MEDIA_EDIT_FORMAT);
       const profiles=new Map(studio.list('media-profile').map(p=>[p.assetId,p]));
