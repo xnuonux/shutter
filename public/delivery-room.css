@@ -1,0 +1,11 @@
+.delivery-check{margin-top:24px;padding-top:24px;border-top:1px solid var(--line,#36363e);min-width:0}
+.delivery-check .eyebrow{font-size:10px;letter-spacing:.12em;margin:0 0 6px}.delivery-check h3{font-size:15px;margin:0 0 12px}
+.check-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:end;margin:18px 0}
+.check-options label{font-size:12px;min-width:0}.check-options input{width:100%;box-sizing:border-box}.check-options .check-toggle{display:flex;flex-direction:row;align-items:center;gap:9px;grid-column:span 2}.check-options .check-toggle input{width:17px;min-width:17px;flex:0 0 17px}
+.check-metrics{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0}.check-metric{background:#18181d;border:1px solid #36363e;border-radius:12px;padding:18px;min-width:0}.check-metric>strong{font-size:26px;letter-spacing:-.04em;color:#e8daba}
+.check-metric dl{display:grid;grid-template-columns:1fr auto;gap:8px;font-size:12px;margin:16px 0}.check-metric dd{margin:0}.check-metric dt{color:#b4b2bb}
+.check-finding{display:flex;align-items:flex-start;gap:12px;border-top:1px solid #303038;padding:12px 0}.check-finding button{white-space:nowrap;margin-top:3px}.check-finding p{margin:0;font-size:13px;line-height:1.5}.check-finding .small{display:block}
+.check-results code{font-size:10px;overflow-wrap:anywhere}.check-report-link{white-space:nowrap;font-size:12px}.check-details{margin-top:18px}.check-details summary{cursor:pointer;font-size:13px}.check-details li{font-size:12px;margin:7px 0;overflow-wrap:anywhere}
+.check-curve svg{display:block;width:100%;max-height:110px;background:#18181d;border-radius:8px}.check-curve path{fill:none;stroke:#bead88;stroke-width:1.5;vector-effect:non-scaling-stroke}
+[data-check-scope="older-saved-render"]{color:#e1be8c!important}
+@media(max-width:700px){.check-options{grid-template-columns:1fr}.check-options .check-toggle{grid-column:auto}.check-metrics{grid-template-columns:1fr}.check-finding{flex-direction:column;gap:6px}.check-results .section-title{flex-wrap:wrap;gap:8px}.check-metric dl{grid-template-columns:1fr}.check-metric dd{margin-bottom:5px}}

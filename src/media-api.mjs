@@ -1,3 +1,4 @@
+import {checkDelivery} from './media-delivery.mjs';
 import {renderListeningMix} from './media-sound.mjs';
 import {applySoundEdit} from '../public/sound-edit.mjs';
 import fs from 'node:fs';
@@ -23,7 +24,7 @@ export function createMediaProduction(studio,input) {
 }
 /** Invoke only after the parent server's localhost/Origin/Sec-Fetch-Site gate. */
 export async function handleMediaRequest(studio,req,res,url) {
-  const staticFiles={'/sound-edit.mjs':['sound-edit.mjs','text/javascript'],'/sound-room.js':['sound-room.js','text/javascript'],'/sound-room.css':['sound-room.css','text/css'],'/music-edit.mjs':['music-edit.mjs','text/javascript'],'/music-room.js':['music-room.js','text/javascript'],'/music-room.css':['music-room.css','text/css'],'/edit-recovery.mjs':['edit-recovery.mjs','text/javascript'],'/media-studio':['media-studio.html','text/html'],'/media-studio.js':['media-studio.js','text/javascript'],'/media-studio.css':['media-studio.css','text/css']};
+  const staticFiles={'/delivery-contract.mjs':['delivery-contract.mjs','text/javascript'],'/delivery-room.js':['delivery-room.js','text/javascript'],'/delivery-room.css':['delivery-room.css','text/css'],'/sound-edit.mjs':['sound-edit.mjs','text/javascript'],'/sound-room.js':['sound-room.js','text/javascript'],'/sound-room.css':['sound-room.css','text/css'],'/music-edit.mjs':['music-edit.mjs','text/javascript'],'/music-room.js':['music-room.js','text/javascript'],'/music-room.css':['music-room.css','text/css'],'/edit-recovery.mjs':['edit-recovery.mjs','text/javascript'],'/media-studio':['media-studio.html','text/html'],'/media-studio.js':['media-studio.js','text/javascript'],'/media-studio.css':['media-studio.css','text/css']};
   if(req.method==='GET'&&staticFiles[url.pathname]) {
     const [name,type]=staticFiles[url.pathname];res.writeHead(200,{'content-type':type,'cache-control':'no-cache'});res.end(await fsp.readFile(path.join(publicRoot,name)));return true;
   }
@@ -33,7 +34,7 @@ export async function handleMediaRequest(studio,req,res,url) {
     if(req.method==='GET'&&url.pathname==='/api/media/state') {
       const timelines=studio.list('timeline').filter(r=>r.timeline?.format===MEDIA_EDIT_FORMAT);
       const profiles=new Map(studio.list('media-profile').map(p=>[p.assetId,p]));
-      json(res,200,{listeningMixes:studio.list('listening-mix'),productions:studio.list('production'),timelines,derivations:studio.list('media-derivation'),assets:studio.list('asset').map(a=>({...a,media:profiles.get(a.id)||null})),cuts:studio.list('cut').filter(c=>c.plan?.format===MEDIA_EDIT_FORMAT)});return true;
+      json(res,200,{deliveryChecks:studio.list('delivery-check'),listeningMixes:studio.list('listening-mix'),productions:studio.list('production'),timelines,derivations:studio.list('media-derivation'),assets:studio.list('asset').map(a=>({...a,media:profiles.get(a.id)||null})),cuts:studio.list('cut').filter(c=>c.plan?.format===MEDIA_EDIT_FORMAT)});return true;
     }
     if(req.method==='GET'&&url.pathname==='/api/media/health') {
       const tools={};for(const name of ['ffmpeg','ffprobe'])try{tools[name]=(await runMedia(name,['-version'],{timeoutMs:5000})).split('\n')[0];}catch(e){tools[name]={error:e.message};}
@@ -81,6 +82,17 @@ export async function handleMediaRequest(studio,req,res,url) {
     }
     if(req.method==='POST'&&parts[2]==='productions'&&parts[4]==='listening-mix'&&parts.length===5) {const input=await body(req);json(res,201,await mediaExclusive(studio,()=>renderListeningMix(studio,parts[3],input)));return true;}
     if(req.method==='POST'&&parts[2]==='productions'&&parts[4]==='render'&&parts.length===5) {const input=await body(req);json(res,200,await mediaExclusive(studio,()=>renderMediaEdit(studio,parts[3],input)));return true;}
+    if(parts.length===5&&parts[2]==='cuts'&&parts[4]==='check') {
+      const cut=studio.read(parts[3],'cut');
+      if(req.method==='GET') {json(res,200,studio.list('delivery-check').filter(r=>r.cutId===cut.id));return true;}
+      if(req.method==='POST') {
+        const input=await body(req),abort=new AbortController();
+        const cancel=()=>{if(!res.writableEnded)abort.abort();};res.once('close',cancel);if(res.destroyed)abort.abort();
+        try {const report=await mediaExclusive(studio,()=>checkDelivery(studio,cut.id,input,{signal:abort.signal}));if(!res.destroyed)json(res,201,report);}
+        finally {res.removeListener('close',cancel);}return true;
+      }
+    }
+    if(req.method==='GET'&&parts.length===4&&parts[2]==='checks') {json(res,200,studio.read(parts[3],'delivery-check'));return true;}
     if(req.method==='GET'&&parts[2]==='cuts'&&parts[4]==='files'&&parts.length===6) {
       const cut=studio.read(parts[3],'cut'),name=decodeURIComponent(parts[5]);
       if(!/^cut-[a-zA-Z0-9]+$/.test(cut.bridgeFolder||'')||!cut.bridgeFiles?.includes(name)||path.basename(name)!==name)throw Error('not_found');
