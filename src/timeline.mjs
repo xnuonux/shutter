@@ -1,6 +1,8 @@
+import { compileMediaEdit, MEDIA_EDIT_FORMAT } from './media-edit.mjs';
 // Source-frame ranges follow Lunari Cinema's non-destructive edit model.
 // Coverage is resolved on scene time before either preview or export.
 export function compileTimeline(studio, projectId, timeline) {
+  if (timeline?.format === MEDIA_EDIT_FORMAT) return compileMediaEdit(studio, projectId, timeline);
   if(!timeline || !Number.isInteger(timeline.fps) || timeline.fps<1 || timeline.fps>120 ||
     !Array.isArray(timeline.main) || !timeline.main.length || timeline.main.length>1000 ||
     !Array.isArray(timeline.coverage) || timeline.coverage.length>1000)

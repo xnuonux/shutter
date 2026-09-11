@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#141417"><title>Shutter · Camera & music</title><link rel="stylesheet" href="/media-studio.css"><script type="module" src="/media-studio.js"></script></head>
+<body>
+<header><a class="brand" href="/">SHUTTER<span>YOUR PRODUCTION, CONNECTED</span></a><nav><a href="/">Direct / Canvas</a><span aria-current="page">Camera & music</span></nav><span class="tag">LOCAL · EXPERIMENTAL</span></header>
+<main>
+<section class="intro"><div><p class="eyebrow">FROM REAL LIGHT TO THE FINAL NOTE</p><h1>Your footage.<br>Your song. <em>One cut.</em></h1><p>Bring camera footage, photographs and your finished master. Build a rough cut, extract references, and prepare an editing handoff—without spending generation credits.</p></div><form id="new-project"><label>New camera / music production<input name="title" placeholder="A song, a scene, a new direction…" maxlength="200" required></label><button type="submit">Create production ↗</button><label>Continue a saved assembly<select id="projects"><option value="">Choose a production</option></select></label></form></section>
+<div id="health" class="notice">Checking local media tools…</div>
+<section class="workspace">
+<aside class="library panel"><div class="section-title"><h2>Material</h2><span id="asset-count">0 assets</span></div><label id="drop-zone" class="drop-zone">Drop footage, photos or audio<span>Or choose files from your computer</span><input id="files" type="file" multiple></label><p class="small">Originals stay unchanged. RAW/ARW and HEIF development is not implemented yet.</p><div id="assets" class="asset-list"></div></aside>
+<div class="workarea">
+<section class="panel viewer-panel"><div class="section-title"><h2 id="source-title">Choose your material</h2><span id="source-kind" class="tag">SOURCE VIEW</span></div><div id="source-view" class="viewer empty">A camera shot, a photograph, a finished song.<br>It all starts here.</div><div id="source-details" class="small"></div><div id="source-actions"></div></section>
+<section id="edit-panel" class="panel"><div class="section-title"><div><p class="eyebrow">THE ASSEMBLY</p><h2 id="project-title">Start a production above</h2></div><span id="revision" class="tag">NO SAVED CUT</span></div>
+<div id="editing" hidden><div class="settings"><label>Frame rate<select id="fps"><option>24000/1001</option><option>24</option><option>25</option><option>30000/1001</option><option>30</option><option>50</option><option>60000/1001</option><option>60</option></select></label><label>Width<input id="width" type="number" min="16" max="4096" step="2"></label><label>Height<input id="height" type="number" min="16" max="4096" step="2"></label></div>
+<label>Mastered song / soundtrack<select id="soundtrack"></select></label><p class="small">The selected track starts at zero. Camera audio is excluded in this first assembly mode. A short soundtrack pads with silence; a long one trims to picture. Your source WAV is never changed.</p>
+<div id="clips" class="clip-list"></div><p id="duration" class="small"></p>
+<div class="action-row"><button id="save">Save cut</button><button id="undo" class="secondary">Undo</button><button id="redo" class="secondary">Redo</button></div>
+<div class="render-controls"><label class="check"><input id="color-consent" type="checkbox">I have reviewed source color. This rough-cut renderer does not grade S-Log, HDR or ICC images. Known HDR is blocked.</label><button id="render">Render & prepare handoff ↗</button></div></div></section>
+<section id="delivery" class="panel" hidden></section>
+</div></section>
+<footer>Keep the original. Make the edit. Explore the next version.<span>Camera footage → references → generation → one production.</span></footer>
+</main><div id="status" role="status" aria-live="polite">Ready.</div>
+</body></html>

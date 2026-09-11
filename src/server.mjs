@@ -9,6 +9,7 @@ import {productionWorkflow,decideTake} from './production-workflow.mjs';
 import {reviewFrames} from './review-frames.mjs';
 import {continueShot} from './continue-shot.mjs';
 import {getCanvas,saveCanvas,connectReference} from './canvas.mjs';
+import { handleMediaRequest } from './media-api.mjs';
 const publicRoot = fileURLToPath(new URL("../public/", import.meta.url));
 async function body(req, limit = 2 * 1024 * 1024) {
   const chunks = [];
@@ -61,6 +62,7 @@ export function createServer({ studio, renderer }) {
       );
       const url = new URL(req.url, "http://" + expectedHost),
         parts = url.pathname.split("/").filter(Boolean);
+      if (await handleMediaRequest(studio, req, res, url)) return;
       if(parts[0]==='api'&&parts[1]==='productions'&&parts[3]==='canvas'&&parts.length===4){
         if(req.method==='GET')return json(res,200,getCanvas(studio,parts[2]));
         if(req.method==='PUT'){const input=JSON.parse(await body(req));return json(res,200,saveCanvas(studio,parts[2],input.baseRevision,input.positions));}
@@ -83,8 +85,11 @@ export function createServer({ studio, renderer }) {
         parts[1] === "productions" &&
         parts[3] === "export-video" &&
         parts.length === 4
-      )
+      ) {
+        if (studio.list('timeline').find(t=>t.projectId===parts[2])?.timeline?.format==='shutter-media-edit-v1')
+          return json(res,409,{error:'Use Camera & Music render with an explicit saved revision and color acknowledgement.'});
         return json(res, 200, await exportCut(studio, parts[2]));
+      }
       if (req.method === "GET" && url.pathname === "/api/state") {
         const active = studio
           .listJobs()
