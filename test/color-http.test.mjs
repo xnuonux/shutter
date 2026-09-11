@@ -1,0 +1,33 @@
+import {test,before,after} from 'node:test';
+import assert from 'node:assert/strict';
+import {spawn} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import {once} from 'node:events';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {runMedia} from '../src/media-io.mjs';
+let child,base,root,asset,preview,prepared;
+const settings={inputEncoding:'rec709',inputRange:'limited',reviewed:true,description:'HTTP fixture'};
+const post=(url,input)=>fetch(base+url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input)});
+before(async()=>{
+ const cwd=fileURLToPath(new URL('../',import.meta.url));root=await fs.mkdtemp(path.join(os.tmpdir(),'color-http-'));
+ child=spawn(process.execPath,['--loader','./test/helpers/media-server-loader.mjs','./test/helpers/media-http-server.mjs'],{cwd,stdio:['ignore','pipe','pipe']});
+ const info=await new Promise((resolve,reject)=>{let out='',err='';const timer=setTimeout(()=>reject(Error(err||'server_timeout')),10000);child.stderr.on('data',b=>err+=b);child.stdout.on('data',b=>{out+=b;try{const v=JSON.parse(out.trim());clearTimeout(timer);resolve(v);}catch{}});child.on('exit',code=>{clearTimeout(timer);reject(Error('server_exit '+code+' '+err));});});base=`http://127.0.0.1:${info.port}`;
+ const filename=path.join(root,'source.mp4');await runMedia('ffmpeg',['-v','error','-f','lavfi','-i','testsrc2=s=96x64:r=24:d=0.5','-c:v','libx264','-threads','1','-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-color_range','tv',filename]);
+ const r=await fetch(base+'/api/media/assets?name=fixture.mp4',{method:'POST',body:await fs.readFile(filename)});assert.equal(r.status,201);asset=await r.json();
+});
+after(async()=>{if(child&&child.exitCode===null){child.kill('SIGTERM');await once(child,'exit');}await fs.rm(root,{recursive:true,force:true});});
+test('color modules are served through actual parent HTTP routes',async()=>{for(const file of ['color-contract.mjs','color-room.js','color-room.css'])assert.equal((await fetch(base+'/'+file)).status,200);});
+test('color state exposes declarations and historical previews',async()=>{const s=await(await fetch(base+'/api/media/state')).json();assert.deepEqual(s.colorLuts,[]);assert.deepEqual(s.colorPreviews,[]);});
+test('foreign-origin LUT writes are blocked before import',async()=>{const r=await fetch(base+'/api/media/color/luts?inputEncoding=rec709',{method:'POST',headers:{origin:'https://attacker.invalid'},body:'LUT_3D_SIZE 2\n'});assert.equal(r.status,403);});
+test('invalid UTF-8 and file directives are rejected',async()=>{for(const body of [Buffer.from([0xff,0xff]),'include "/etc/passwd"']){const r=await fetch(base+'/api/media/color/luts?inputEncoding=rec709',{method:'POST',body});assert.equal(r.status,400);}});
+test('33-cube larger than the 1MiB JSON limit imports through its bounded raw route',async()=>{
+ const n=33,rows=Array.from({length:n**3},(_,i)=>[i%n,Math.floor(i/n)%n,Math.floor(i/n/n)].map(v=>(v/(n-1)).toFixed(12)).join(' '));const body='LUT_3D_SIZE 33\n'+rows.join('\n')+'\n';assert.ok(Buffer.byteLength(body)>1024**2);
+ const r=await fetch(base+'/api/media/color/luts?name=Identity.cube&inputEncoding=rec709',{method:'POST',body,headers:{'content-type':'application/octet-stream'}});assert.equal(r.status,201);assert.equal((await r.json()).size,33);
+});
+test('an unchecked interpretation cannot render even a preview',async()=>{const r=await post(`/api/media/assets/${asset.id}/color-preview`,{settings:{...settings,reviewed:false}});assert.equal(r.status,400);assert.equal((await r.json()).error,'color_review_required');});
+test('actual preview route records exact source and selected last decoded frame',async()=>{const r=await post(`/api/media/assets/${asset.id}/color-preview`,{settings,frame:'last'});assert.equal(r.status,201);preview=await r.json();assert.equal(preview.frame,11);assert.equal(preview.sourceSha256,asset.sha256);assert.equal((await fetch(base+'/media/'+preview.afterAssetId)).status,200);});
+test('stale preview cannot authorize a changed conversion',async()=>{const r=await post(`/api/media/assets/${asset.id}/color-prepare`,{settings:{...settings,inputRange:'full'},previewId:preview.id});assert.equal(r.status,400);assert.equal((await r.json()).error,'color_preview_stale');});
+test('preparation returns a separate picture asset and keeps all existing cuts unchanged',async()=>{const before=await(await fetch(base+'/api/media/state')).json();const r=await post(`/api/media/assets/${asset.id}/color-prepare`,{settings,previewId:preview.id});assert.equal(r.status,201);prepared=await r.json();assert.equal(prepared.asset.media.videoCodec,'prores');assert.deepEqual(prepared.asset.media.audio,[]);const after=await(await fetch(base+'/api/media/state')).json();assert.deepEqual(after.timelines,before.timelines);assert.deepEqual(after.cuts,before.cuts);assert.equal(after.assets.find(a=>a.id===asset.id).sha256,asset.sha256);});
+test('prepared picture supports existing viewing-copy HTTP action',async()=>{const r=await post(`/api/media/assets/${prepared.asset.id}/proxy`,{acknowledgeUnmanagedColor:true});assert.equal(r.status,201);assert.equal((await r.json()).recipe.colorPolicy,'prepared-rec709-viewing');});
