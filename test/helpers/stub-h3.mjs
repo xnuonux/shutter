@@ -1,0 +1,1 @@
+export function h3Snapshot(studio,p,shot){const bindings=[{assetId:shot.reference,role:'opening frame'},...(shot.endReference?[{assetId:shot.endReference,role:'ending frame'}]:[])];return {workflow:'minimax/h3-max/image-to-video',bindings,references:bindings.map(b=>studio.verifyAsset(b.assetId)),place:{}};}
