@@ -27,7 +27,7 @@ The API separates four materially different acts:
 
 If submission fails after Shutter has crossed the provider boundary and cannot know whether the request was accepted, the job becomes **unknown**. It is not automatically submitted again. If there is a provider receipt, explicit reconciliation can continue from it.
 
-An H3 image-to-video output for an **Alternate** is added to the existing Take Stack as `generated-candidate` only when the saved target is still exactly current. It remains unaccepted and the authored timeline is unchanged. The existing Take Stack fit check still decides whether the generated duration can fill that shot without stretching. Continue/Bridge results become `ready-insert` candidates; this increment deliberately does not invent a new timeline slot or lengthen the song cut automatically. A stale target becomes `ready-historical` rather than being attached to a newer edit.
+An H3 image-to-video output for an **Alternate** is added to the existing Take Stack as `generated-candidate` only when the saved target is still exactly current. It remains unaccepted and the authored timeline is unchanged. The existing Take Stack fit check still decides whether the generated duration can fill that shot without stretching. Continue/Bridge results become `ready-insert` candidates; they do not lengthen the cut automatically. A separate revision-guarded **Apply** action inserts the decoded generated result immediately after the target shot, preserves the mastered song, markers and finishing text on their existing timeline clock, and saves the change through normal timeline history. A stale target becomes `ready-historical` rather than being attached to a newer edit.
 
 ## Data leaving the device
 
@@ -75,6 +75,7 @@ GET  /api/media/productions/:project/inserts/:insert
 POST /api/media/productions/:project/inserts/:insert/quote
 POST /api/media/productions/:project/inserts/:insert/submit
 POST /api/media/productions/:project/inserts/:insert/reconcile
+POST /api/media/productions/:project/inserts/:insert/apply
 POST /api/media/productions/:project/inserts/:insert/discard
 ```
 
@@ -110,17 +111,17 @@ The exact amount above is only an example. The caller must use the current retur
 
 ## Verification performed in the scoped implementation workspace
 
-**24 focused tests passed** in this development pass:
+**25 focused tests passed** in this development pass:
 
 - 11 pure Generative Insert contract tests;
 - 5 H3/fal adapter tests with a fake pricing/provider boundary;
-- 8 orchestration tests using the exact `generative-inserts.mjs` under a dependency loader.
+- 9 orchestration tests using the exact `generative-inserts.mjs` under a dependency loader.
 
-The orchestration checks cover local-only planning, idempotent request keys, cut mutation during frame extraction, quote-without-authorization, discard-after-quote without provider submission, explicit submission authorization, ambiguous submission state, generated Alternate → unaccepted Take Stack candidate, and Continue → separate insert candidate with an unchanged timeline.
+The orchestration checks cover local-only planning, idempotent request keys, cut mutation during frame extraction, quote-without-authorization, discard-after-quote without provider submission, explicit submission authorization, ambiguous submission state, generated Alternate → unaccepted Take Stack candidate, Continue → separate insert candidate with an unchanged timeline, and explicit Continue application → one saved picture insertion while soundtrack/markers/text remain unchanged.
 
 The provider tests verify that 1080P/quality reach H3 image-to-video input, quote preparation uses a live pricing response rather than a date constant, timeline jobs reject a newer saved cut, and the per-insert spending ceiling is checked before submission. They do not constitute a live provider render or billing certification.
 
-These 24 tests are **not** the preceding PR #8's 392-test scoped suite. The full inherited suite has not been rerun in this incremental workspace. Actual FFmpeg integration of `generative-inserts.mjs`, actual parent HTTP routing, browser UI, FAL_KEY behavior, provider receipt/download behavior, real camera media, color appearance and native editor interoperability remain unqualified in this pass. The new feature is therefore a draft engineering branch, not a release claim.
+These 25 tests are **not** the preceding PR #8's 392-test scoped suite. The full inherited suite has not been rerun in this incremental workspace. Actual FFmpeg integration of `generative-inserts.mjs`, actual parent HTTP routing, browser UI, FAL_KEY behavior, provider receipt/download behavior, real camera media, color appearance and native editor interoperability remain unqualified in this pass. The new feature is therefore a draft engineering branch, not a release claim.
 
 ## Important remaining work
 
@@ -133,6 +134,6 @@ The immediate next user-facing step is the contextual **Generate** surface insid
 - require explicit spend authorization;
 - show unknown/reconcile states without a retry button that can duplicate charges;
 - refresh the Take Stack automatically when a generated Alternate arrives;
-- provide a deliberate timeline insertion proposal for Continue/Bridge rather than auto-changing duration.
+- expose the existing deliberate Apply operation for Continue/Bridge only after the user reviews the returned media; never auto-change duration.
 
 After that, model routing can sit above this contract instead of leaking provider APIs into the artist's workflow. The artist should ask for an outcome; Shutter should retain the evidence, cost, provider receipt and reversible production decision underneath it.

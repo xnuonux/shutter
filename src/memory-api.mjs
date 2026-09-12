@@ -1,4 +1,5 @@
 import {planGenerativeInsert,listGenerativeInserts,readGenerativeInsert,discardGenerativeInsert,quoteGenerativeInsert,submitGenerativeInsert,reconcileGenerativeInsert} from './generative-inserts.mjs';
+import {applyGeneratedInsert} from './generative-insert-apply.mjs';
 import {saveMoment,deleteMoment,searchMoments,getTakeStack,collectTake,acceptTake,exportProductionMemory} from './production-memory.mjs';
 import {scoutAsset,readScoutImage} from './media-scout.mjs';
 import {mediaExclusive} from './media-io.mjs';
@@ -36,6 +37,7 @@ export async function handleMemoryRequest(studio,req,res,url){
       if(p[6]==='quote'){json(res,200,await quoteGenerativeInsert(studio,p[3],p[5],input));return true;}
       if(p[6]==='submit'){json(res,200,await submitGenerativeInsert(studio,p[3],p[5],input));return true;}
       if(p[6]==='reconcile'){json(res,200,await reconcileGenerativeInsert(studio,p[3],p[5],input));return true;}
+      if(p[6]==='apply'){json(res,200,await applyGeneratedInsert(studio,p[3],p[5],input));return true;}
     }
     if(scout&&p[2]==='assets'&&p.length===5&&req.method==='POST'){
       const input=await body(req);const result=await mediaExclusive(studio,()=>scoutAsset(studio,p[3],input,{signal:abort.signal}));if(!res.destroyed)json(res,201,result);return true;
