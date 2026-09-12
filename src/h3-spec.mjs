@@ -5,7 +5,10 @@ export function validateH3(studio,shot,cast) {
  const g=shot.generation;
  if(g.model!=='h3-max'||!h3Modes.includes(g.mode))throw Error('h3_mode');
  if(!Number.isInteger(g.duration)||g.duration<5||g.duration>15)throw Error('h3_duration');
- if(!['480P','768P'].includes(g.resolution))throw Error('h3_resolution');
+ if(!['480P','768P','1080P'].includes(g.resolution))throw Error('h3_resolution');
+ if(!['balanced','quality'].includes(g.promptExpansionMode||'balanced'))throw Error('h3_prompt_expansion');
+ // The existing reference-token estimator has measured/documented coefficients only for 480P/768P.
+ if(g.mode==='reference-to-video'&&g.resolution==='1080P')throw Error('h3_reference_1080_unqualified');
  if(!['16:9','21:9','4:3','1:1','3:4','9:16','adaptive'].includes(g.aspectRatio||'16:9')||(g.mode==='text-to-video'&&g.aspectRatio==='adaptive'))throw Error('h3_aspect_ratio');
  const seen=new Set();
  for(const state of shot.characterStates||[]) {
@@ -52,7 +55,7 @@ export function h3Input(job,urlFor) {
   ...(s.shot.characterStates||[]).map(c=>(s.cast.find(x=>x.id===c.castId)?.name||c.castId)+' current condition: '+(c.description||'')),
   s.place.name?'Location: '+s.place.name:'',s.shot.before?'Opening state: '+s.shot.before:'',s.shot.action,s.shot.camera?'Camera: '+s.shot.camera:'',s.shot.after?'Visible ending state: '+s.shot.after:'',s.shot.sound?'Sound and dialogue: '+s.shot.sound:'Natural scene sound. No music or captions.'].filter(Boolean).join('\n');
  if(prompt.length>50000)throw Error('h3_prompt_limit');
- const input={prompt,duration:g.duration,resolution:g.resolution,prompt_expansion_mode:'balanced',enable_safety_checker:true,sync_mode:false};
+ const input={prompt,duration:g.duration,resolution:g.resolution,prompt_expansion_mode:g.promptExpansionMode||'balanced',enable_safety_checker:true,sync_mode:false};
  if(Number.isInteger(s.shot.seed))input.seed=s.shot.seed;
  if(g.mode==='image-to-video') {
   if(s.shot.reference)input.image_url=urlFor(s.shot.reference);

@@ -1,3 +1,4 @@
+import {planGenerativeInsert,listGenerativeInserts,readGenerativeInsert,discardGenerativeInsert,quoteGenerativeInsert,submitGenerativeInsert,reconcileGenerativeInsert} from './generative-inserts.mjs';
 import {saveMoment,deleteMoment,searchMoments,getTakeStack,collectTake,acceptTake,exportProductionMemory} from './production-memory.mjs';
 import {scoutAsset,readScoutImage} from './media-scout.mjs';
 import {mediaExclusive} from './media-io.mjs';
@@ -6,7 +7,7 @@ const json=(res,status,data)=>{res.writeHead(status,{'content-type':'application
 /** The parent localhost/Origin gate runs first. This does not supply hosted authentication. */
 export async function handleMemoryRequest(studio,req,res,url){
   const p=url.pathname.split('/').filter(Boolean);
-  const production=p[0]==='api'&&p[1]==='media'&&p[2]==='productions'&&['memory','takes','memory-export'].includes(p[4]);
+  const production=p[0]==='api'&&p[1]==='media'&&p[2]==='productions'&&['memory','takes','memory-export','inserts'].includes(p[4]);
   const scout=p[0]==='api'&&p[1]==='media'&&((p[2]==='assets'&&p[4]==='scout')||p[2]==='scouts');
   if(!production&&!scout)return false;
   const abort=new AbortController(),cancel=()=>{if(!res.writableEnded)abort.abort();};res.once('close',cancel);if(res.destroyed)abort.abort();
@@ -25,6 +26,17 @@ export async function handleMemoryRequest(studio,req,res,url){
       if(req.method==='POST'){const input=await body(req);json(res,201,await mediaExclusive(studio,()=>collectTake(studio,p[3],p[5],input)));return true;}
     }
     if(production&&p[4]==='takes'&&p[6]==='accept'&&p.length===7&&req.method==='POST'){const input=await body(req);json(res,200,await mediaExclusive(studio,()=>acceptTake(studio,p[3],p[5],input)));return true;}
+    if(production&&p[4]==='inserts'&&p.length===5){
+      if(req.method==='GET'){const clipId=url.searchParams.get('clipId');json(res,200,{schema:'shutter-generative-insert-list-v1',projectId:p[3],results:listGenerativeInserts(studio,p[3],{clipId,limit:Number(url.searchParams.get('limit')||50)})});return true;}
+      if(req.method==='POST'){const input=await body(req);const result=await mediaExclusive(studio,()=>planGenerativeInsert(studio,p[3],input,{signal:abort.signal}));if(!res.destroyed)json(res,201,result);return true;}
+    }
+    if(production&&p[4]==='inserts'&&p.length===6&&req.method==='GET'){json(res,200,readGenerativeInsert(studio,p[3],p[5]));return true;}
+    if(production&&p[4]==='inserts'&&p.length===7&&req.method==='POST'){const input=await body(req);
+      if(p[6]==='discard'){json(res,200,discardGenerativeInsert(studio,p[3],p[5],input));return true;}
+      if(p[6]==='quote'){json(res,200,await quoteGenerativeInsert(studio,p[3],p[5],input));return true;}
+      if(p[6]==='submit'){json(res,200,await submitGenerativeInsert(studio,p[3],p[5],input));return true;}
+      if(p[6]==='reconcile'){json(res,200,await reconcileGenerativeInsert(studio,p[3],p[5],input));return true;}
+    }
     if(scout&&p[2]==='assets'&&p.length===5&&req.method==='POST'){
       const input=await body(req);const result=await mediaExclusive(studio,()=>scoutAsset(studio,p[3],input,{signal:abort.signal}));if(!res.destroyed)json(res,201,result);return true;
     }
@@ -32,6 +44,6 @@ export async function handleMemoryRequest(studio,req,res,url){
       if(!/^\d+$/.test(p[5]))throw Error('not_found');const bytes=await readScoutImage(studio,p[3],Number(p[5]));res.writeHead(200,{'content-type':'image/jpeg','content-length':bytes.length,'cache-control':'private, max-age=0','x-content-type-options':'nosniff'});res.end(bytes);return true;
     }
     json(res,404,{error:'not_found'});
-  }catch(e){if(!res.destroyed&&!res.headersSent)json(res,/conflict|busy/.test(e.message)?409:e.message==='not_found'?404:400,{error:e.message});else if(!res.destroyed)res.destroy();}
+  }catch(e){if(!res.destroyed&&!res.headersSent)json(res,/conflict|busy|unknown/.test(e.message)?409:e.message==='not_found'?404:400,{error:e.message});else if(!res.destroyed)res.destroy();}
   finally{res.removeListener('close',cancel);}return true;
 }
