@@ -113,12 +113,19 @@ export class Studio {
     return path.join(this.root, "assets", a.filename);
   }
   verifyAsset(id) {
-    const asset = this.read(id, "asset");
-    if (
-      !fs.existsSync(this.assetPath(id)) ||
-      digest(fs.readFileSync(this.assetPath(id))) !== asset.sha256
-    )
+    const asset = this.read(id, "asset"), filename = this.assetPath(id);
+    if (!fs.existsSync(filename)) throw new Error("asset_integrity");
+    const stat = fs.lstatSync(filename);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size !== asset.bytes)
       throw new Error("asset_integrity");
+    const hash = crypto.createHash("sha256"), buffer = Buffer.alloc(1024 * 1024);
+    const fd = fs.openSync(filename, "r");
+    try {
+      let count;
+      while ((count = fs.readSync(fd, buffer, 0, buffer.length, null)) > 0)
+        hash.update(buffer.subarray(0, count));
+    } finally { fs.closeSync(fd); }
+    if (hash.digest("hex") !== asset.sha256) throw new Error("asset_integrity");
     return asset;
   }
   validateProduction(input) {
@@ -438,8 +445,12 @@ export class Studio {
     const jobs = this.listJobs().filter((j) => j.projectId === id);
     const stages = this.list("stage").filter((s) => s.projectId === id);
     const cuts = this.list("cut").filter((c) => c.projectId === id);
+    const timeline = this.list('timeline').find(t=>t.projectId===id)||null;
     const refs = new Set(
       [
+        ...(timeline?.timeline?.clips||[]).map(c=>c.assetId),
+        timeline?.timeline?.soundtrack?.assetId,
+        ...cuts.flatMap(c=>(c.plan?.sources||[]).map(s=>s.assetId)),
         ...production.shots.map((s) => s.reference),
         ...production.shots.flatMap(s=>[s.endReference,s.location?.reference,...(s.characterStates||[]).map(c=>c.reference),...(s.extraReferences||[]).map(r=>r.assetId)]),
         ...(production.cast || []).map((c) => c.reference),
@@ -451,13 +462,25 @@ export class Studio {
         ...cuts.map((c) => c.output),
       ].filter(Boolean),
     );
+    const derivations = this.list('media-derivation'), included = new Set();
+    let added;
+    do {
+      added = false;
+      for (const d of derivations) {
+        if (refs.has(d.outputAssetId) && !included.has(d.id)) {
+          included.add(d.id); refs.add(d.recipe.sourceAssetId); added = true;
+        }
+      }
+    } while (added);
     return {
       format: "shutter-production-v1",
       production,
       jobs,
       stages,
       cuts,
-      timeline: this.list('timeline').find(t=>t.projectId===id)||null,
+      timeline,
+      mediaProfiles: this.list('media-profile').filter(p=>refs.has(p.assetId)),
+      mediaDerivations: derivations.filter(d=>included.has(d.id)),
       canvas: this.list('canvas').find(c=>c.projectId===id)||null,
       assets: [...refs].map((id) => this.verifyAsset(id)),
       exportedAt: new Date().toISOString(),
