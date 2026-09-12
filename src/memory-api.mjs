@@ -1,12 +1,18 @@
+import fsp from 'node:fs/promises';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {planGenerativeInsert,listGenerativeInserts,readGenerativeInsert,discardGenerativeInsert,quoteGenerativeInsert,submitGenerativeInsert,reconcileGenerativeInsert} from './generative-inserts.mjs';
 import {applyGeneratedInsert} from './generative-insert-apply.mjs';
 import {saveMoment,deleteMoment,searchMoments,getTakeStack,collectTake,acceptTake,exportProductionMemory} from './production-memory.mjs';
 import {scoutAsset,readScoutImage} from './media-scout.mjs';
 import {mediaExclusive} from './media-io.mjs';
+const publicRoot=fileURLToPath(new URL('../public/',import.meta.url));
 async function body(req){let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>65536)throw Error('request_too_large');chunks.push(chunk);}return JSON.parse(Buffer.concat(chunks).toString('utf8')||'{}');}
 const json=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data));};
 /** The parent localhost/Origin gate runs first. This does not supply hosted authentication. */
 export async function handleMemoryRequest(studio,req,res,url){
+  const generateStatic={'/api/media/generate-room.js':['generate-room.js','text/javascript'],'/api/media/generate-room.css':['generate-room.css','text/css']};
+  if(req.method==='GET'&&generateStatic[url.pathname]){const [name,type]=generateStatic[url.pathname];res.writeHead(200,{'content-type':type,'cache-control':'no-cache','x-content-type-options':'nosniff'});res.end(await fsp.readFile(path.join(publicRoot,name)));return true;}
   const p=url.pathname.split('/').filter(Boolean);
   const production=p[0]==='api'&&p[1]==='media'&&p[2]==='productions'&&['memory','takes','memory-export','inserts'].includes(p[4]);
   const scout=p[0]==='api'&&p[1]==='media'&&((p[2]==='assets'&&p[4]==='scout')||p[2]==='scouts');
