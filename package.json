@@ -1,1 +1,1 @@
-{"name":"shutter","version":"0.1.0","private":true,"type":"module","engines":{"node":">=24.0.0"},"scripts":{"start":"node tools/h3-live-lab-server.mjs","test":"node --test test/*.test.mjs","seed":"node tools/seed.mjs"}}
+{"name":"shutter","version":"0.1.0","private":true,"type":"module","engines":{"node":">=24.0.0"},"scripts":{"start":"node tools/h3-live-lab-round2.mjs","test":"node --test test/*.test.mjs","seed":"node tools/seed.mjs"}}
