@@ -1,72 +1,63 @@
 # Generative Inserts — governed timeline-to-generation foundation
 
-Date: 2026-09-12. Experimental backend increment stacked on Production Memory commit `880268cc4c01f5463d9b950fdd227a15f97adda4` / draft PR #8.
+Date: 2026-09-12. Experimental branch stacked on Production Memory / draft PR #8.
 
-This implements the first provider-aware half of the founder-approved **Production Memory → Generative Inserts → Take Stacks** loop. It is deliberately built around the saved production rather than a disconnected prompt box.
+Generative Inserts is the first provider-aware slice of the approved **Production Memory → Generative Inserts → Take Stacks** vision. The timeline supplies context; generation produces candidates; the artist retains control over spending and edit decisions.
 
-## What is implemented
+See [`h3-live-validation-2026-09-12.md`](h3-live-validation-2026-09-12.md) for the paid H3 Max study that now informs these defaults.
 
-A saved shot can now be planned as one of three intents:
+## Artist intents
 
-- **Alternate** — derive the clean first and last visible composition frames of the selected shot. The eventual result belongs under that shot's Take Stack and is never accepted automatically.
-- **Continue** — derive the clean final visible frame. The eventual result is an insertion candidate anchored after the selected shot; the current cut is not lengthened automatically.
-- **Bridge** — derive the selected shot's final visible frame and the next shot's first visible frame. The eventual result is an insertion candidate between those shots; it does not silently replace either side.
+Shutter models outcomes rather than exposing raw H3 endpoints:
 
-Reference frames are rendered locally from the actual saved timeline selection and its preserved cadence sampling. Fit/Fill is therefore reflected in the reference. Finishing text and audio are excluded. The source asset is checksum-verified before and after extraction. The timeline revision and target selection are checked again after asynchronous decoding and again before the governed plan record is written. A changed cut fails rather than rebinding an old request to a new edit.
+- **Alternate** — another take of the selected shot, bounded by its opening and ending frames. Returned media enters that shot's Take Stack unaccepted.
+- **Continue** — continue naturally from the selected shot's accepted ending frame. The result is a reviewed insertion candidate after the shot.
+- **New Angle** — create the next adjacent shot from a distinct camera position while carrying current appearance and prior motion. Shutter derives the ending still as **appearance/current-state authority** and a short visual-only tail of the selected shot as **motion/time authority**. The entire camera original and mastered song are not sent.
+- **Bridge** — connect the selected shot to the next shot using both boundaries. This is explicitly a creative transition intent; H3 may invent an occlusion, dissolve or transformation when the boundaries differ.
+- **Arrive** — create preceding action that resolves into the selected shot's first frame. The returned result is inserted before the destination only after review.
 
-A plan stores the exact timeline revision, plan hash, target fingerprint, source checksums, generated reference assets, intended landing behavior, prompt, duration, resolution, prompt-expansion mode, and a hard per-insert spending ceiling. Planning itself does **not** contact a provider or create a provider job.
+Planning is local. References are derived from the exact saved timeline selection and checked against the saved revision and source checksums before the governed intent record is committed.
 
-## Provider and spending flow
+## Creative defaults learned from live H3 testing
 
-The API separates four materially different acts:
+- **Faithful** = H3 `balanced`; this is the default.
+- **Elaborate** = H3 `quality`; it is opt-in because live tests showed quality expansion can add extensive motion, audio direction and non-diegetic music.
+- **Draft** = 480P.
+- **Review** = 768P.
+- **Finish candidate** = 1080P for image-to-video. Reference-to-video 1080P remains deliberately blocked until its reference-input pricing/model behavior is qualified.
+- Generated audio policy is `isolated-never-auto-mix`: it never changes the mastered song or Sound Stage automatically.
+- The provider's expanded prompt, seed/timings when returned, request ID, estimated/reserved/actual cost and billable units are retained as evidence.
 
-1. **Plan** — local only. Creates reviewed PNG boundary references and a persistent intent record. No provider job, upload, quote or generation.
-2. **Quote** — creates a timeline-bound H3 image-to-video job and asks fal's live pricing endpoint for the current endpoint price. It locally probes references but does not submit generation media. The quote is recorded with an expiry and remains unauthorized.
-3. **Submit** — requires the exact insert-record revision, explicit disclosure acceptance, `authorize: true`, and the exact quoted reserved amount. The per-insert ceiling and the existing global Shutter study budget are both enforced. Provider pricing is checked again immediately before submission.
-4. **Reconcile** — follows a known provider receipt, downloads the returned video only from the existing allowlisted fal hosts, verifies its decoded profile, registers it as immutable media, and then connects it back to the production.
+The provider's own `retention_analysis` or statements such as “fully preserved” are **not** accepted continuity truth. They remain unreviewed provider evidence until Shutter/the artist evaluates the returned media.
 
-If submission fails after Shutter has crossed the provider boundary and cannot know whether the request was accepted, the job becomes **unknown**. It is not automatically submitted again. If there is a provider receipt, explicit reconciliation can continue from it.
+## Plan → Quote → Submit → Reconcile → Apply
 
-An H3 image-to-video output for an **Alternate** is added to the existing Take Stack as `generated-candidate` only when the saved target is still exactly current. It remains unaccepted and the authored timeline is unchanged. The existing Take Stack fit check still decides whether the generated duration can fill that shot without stretching. Continue/Bridge results become `ready-insert` candidates; they do not lengthen the cut automatically. A separate revision-guarded **Apply** action inserts the decoded generated result immediately after the target shot, preserves the mastered song, markers and finishing text on their existing timeline clock, and saves the change through normal timeline history. A stale target becomes `ready-historical` rather than being attached to a newer edit.
+1. **Plan** — local only. Derive the minimum needed references, bind to the exact saved timeline revision and target fingerprint, and record what would leave the device. No provider job.
+2. **Quote** — locally decode references, query fal's live endpoint price and return an unauthorized quote. For Ref2V the quote separately reports output cost and a conservative variable reference-input reserve.
+3. **Submit** — requires explicit disclosure acceptance, the exact current reserved amount and an artist authorization flag. Pricing, timeline revision and spending ceiling are rechecked immediately before the provider request.
+4. **Reconcile** — follow the known provider receipt; never blind-retry an uncertain submission. Download only from allowlisted fal media hosts, decode/verify the result, register immutable output and reconcile actual billable units.
+5. **Apply / Accept** — never automatic. Alternate enters the Take Stack. Continue/New Angle/Bridge/Arrive remain insertion candidates until a revision-guarded Apply saves them through normal timeline history.
+
+The mastered soundtrack, markers and finishing text stay on their existing global timeline clock when picture is inserted.
+
+## Cost behavior
+
+Live September 12 testing confirmed the current H3 Max 480P base prices used by Shutter's live quote path: image-to-video/camera-control output at $0.0125/sec and reference-to-video output at $0.05/sec. 768P and 1080P image-to-video observations matched 1.6× and 3.2× multipliers.
+
+Reference-video cost is not just output duration. Two live 5-second prior-video Ref2V samples cost $0.33458 and $0.35506 against a $0.25 base-output price. Shutter therefore exposes variable reference-input reserve and records actual provider billing after completion. The code does not hard-code a promotional calendar price; it asks fal's pricing endpoint at quote and checks it again at submission.
 
 ## Data leaving the device
 
-The plan records a disclosure before any paid action. For the current image-to-video path, submission sends:
+For ordinary I2V intents, only the authored direction and the required derived composition PNG(s) are sent.
 
-- the authored prompt;
-- one derived PNG for Continue;
-- two derived PNGs for Alternate or Bridge.
+For New Angle, the governed disclosure includes:
+- one derived PNG containing the accepted current appearance/state;
+- one short derived motion-reference video from the selected shot's tail;
+- the authored direction.
 
-Camera originals, the mastered song, independent sound lanes, finishing text and unrelated library media remain local. The current fal adapter sends those PNGs as base64 data URIs from the server side, so the API key is not exposed to browser code.
+The New Angle tail is picture-only. Camera originals, mastered song, sound lanes, finishing text and unrelated library media stay local.
 
-The derived PNGs are composition references, not calibrated color proofs. The source production is still an unmanaged-SDR rough-cut pipeline. Explicit color-review acknowledgement remains required before a plan is created.
-
-## H3 adapter update
-
-The existing H3 adapter was refreshed to match the current fal H3 Max image-to-video contract used by this feature:
-
-- 480P / 768P / 1080P selection;
-- `balanced` or `quality` prompt expansion;
-- optional opening `image_url` and ending `end_image_url`;
-- 5–15 second duration;
-- live fal endpoint pricing at quote time instead of a calendar-coded launch-promotion price;
-- resolution multipliers carried through the quote (480P 1×, 768P 1.6×, 1080P 3.2×);
-- timeline-revision validation for media-studio jobs;
-- a per-job spending ceiling checked before provider submission.
-
-The Reference-to-Video endpoint also advertises 1080P, but Shutter still blocks **1080P reference-to-video** because the existing reference-video token estimator is only modeled for the published 480P and 768P token coefficients. That conservative block does not affect this Generative Insert image-to-video path.
-
-Primary provider references checked September 12, 2026:
-
-- https://fal.ai/models/minimax/h3-max/image-to-video/api
-- https://fal.ai/minimax-h3-max
-- https://fal.ai/models/minimax/h3-max/reference-to-video
-
-The current public H3 Max launch rate is promotional through September 14, 2026. This code intentionally does not hard-code the calendar promotion into the quote path; it reads the endpoint's live unit price. No paid live render was executed during this development pass.
-
-## HTTP contract
-
-All routes still sit behind the existing local Host/Origin/Sec-Fetch-Site gate. That gate is not hosted multi-tenant authentication.
+## API
 
 ```text
 POST /api/media/productions/:project/inserts
@@ -79,61 +70,22 @@ POST /api/media/productions/:project/inserts/:insert/apply
 POST /api/media/productions/:project/inserts/:insert/discard
 ```
 
-Planning request example:
+The routes remain behind the existing localhost/Origin gate; that gate is not hosted multi-tenant authentication.
 
-```json
-{
-  "requestKey": "client-generated-idempotency-key",
-  "baseRevision": 12,
-  "clipId": "shot_12",
-  "kind": "bridge",
-  "prompt": "Continue the camera push as the room dissolves into black liquid glass, then settle naturally into the next real shot.",
-  "duration": 5,
-  "resolution": "768P",
-  "quality": "balanced",
-  "maxUsd": 0.50,
-  "acknowledgeUnmanagedColor": true
-}
-```
+## Safety / truthfulness boundaries
 
-Submission is a separate request and requires the exact quote amount:
+- Reference conditioning is not a guarantee of identity or seamless motion.
+- Bridge is not advertised as physically seamless.
+- Provider-expanded text is retained as provider evidence, not rewritten as user intent.
+- Generated audio is never silently mixed under the artist's master.
+- Planning does not spend money.
+- Quoting does not authorize spending.
+- An ambiguous post-send state is `unknown`, not a retry opportunity.
+- A result cannot attach to a newer saved target.
+- No generated take is accepted automatically.
 
-```json
-{
-  "baseRevision": 4,
-  "authorize": true,
-  "acceptDisclosure": true,
-  "acceptedReservedUsd": 0.10
-}
-```
+## Verification
 
-The exact amount above is only an example. The caller must use the current returned quote.
+The original Generative Inserts increment had 25 focused tests. This live-evidence refinement adds policy checks for New Angle/Arrive, Faithful defaults, authority-role prompts, reference disclosure and variable Ref2V quote structure. A small local reconstruction used during this pass reported **10/10 new policy/adapter checks passing** and syntax-checked the revised orchestration/provider modules.
 
-## Verification performed in the scoped implementation workspace
-
-**25 focused tests passed** in this development pass:
-
-- 11 pure Generative Insert contract tests;
-- 5 H3/fal adapter tests with a fake pricing/provider boundary;
-- 9 orchestration tests using the exact `generative-inserts.mjs` under a dependency loader.
-
-The orchestration checks cover local-only planning, idempotent request keys, cut mutation during frame extraction, quote-without-authorization, discard-after-quote without provider submission, explicit submission authorization, ambiguous submission state, generated Alternate → unaccepted Take Stack candidate, Continue → separate insert candidate with an unchanged timeline, and explicit Continue application → one saved picture insertion while soundtrack/markers/text remain unchanged.
-
-The provider tests verify that 1080P/quality reach H3 image-to-video input, quote preparation uses a live pricing response rather than a date constant, timeline jobs reject a newer saved cut, and the per-insert spending ceiling is checked before submission. They do not constitute a live provider render or billing certification.
-
-These 25 tests are **not** the preceding PR #8's 392-test scoped suite. The full inherited suite has not been rerun in this incremental workspace. Actual FFmpeg integration of `generative-inserts.mjs`, actual parent HTTP routing, browser UI, FAL_KEY behavior, provider receipt/download behavior, real camera media, color appearance and native editor interoperability remain unqualified in this pass. The new feature is therefore a draft engineering branch, not a release claim.
-
-## Important remaining work
-
-The immediate next user-facing step is the contextual **Generate** surface inside Production Memory / Take Stack:
-
-- choose Alternate / Continue / Bridge from the currently selected shot;
-- show the derived opening/ending references before quoting;
-- show exactly what will leave the device;
-- obtain the live quote without submitting;
-- require explicit spend authorization;
-- show unknown/reconcile states without a retry button that can duplicate charges;
-- refresh the Take Stack automatically when a generated Alternate arrives;
-- expose the existing deliberate Apply operation for Continue/Bridge only after the user reviews the returned media; never auto-change duration.
-
-After that, model routing can sit above this contract instead of leaking provider APIs into the artist's workflow. The artist should ask for an outcome; Shutter should retain the evidence, cost, provider receipt and reversible production decision underneath it.
+That is not a rerun of Production Memory's inherited scoped suite. Actual browser UI for Generate, representative FX30/a6300 media, independent visual qualification of the live H3 outputs, calibrated color and native Resolve/FL Studio interoperability remain open release gates.
