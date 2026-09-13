@@ -114,5 +114,6 @@ export async function acceptTake(studio,projectId,clipId,{baseRevision,stackRevi
 export function exportProductionMemory(studio,projectId){
   project(studio,projectId);return {schema:'shutter-production-memory-export-v1',projectId,
     moments:studio.list('memory-moment').filter(m=>m.projectId===projectId),stacks:studio.list('take-stack').filter(s=>s.projectId===projectId),
+    directions:studio.list('shot-direction').filter(d=>d.projectId===projectId),shotProposals:studio.list('shot-proposal').filter(p=>p.projectId===projectId),
     limitations:['Metadata only; not a portable media/database backup.','Search is lexical over artist-authored words; no visual identity inference or transcription.']};
 }

@@ -1,0 +1,17 @@
+#direction-room h2{font-size:17px;margin:0 0 5px}#direction-room h3{font-size:15px;line-height:1.4;margin:0 0 8px}
+.direction-intro{font-size:12px;line-height:1.6;color:var(--muted);margin:0 0 17px}
+#direction-room>label,#direction-brief>label{display:flex;flex-direction:column;gap:6px;font-size:12px;margin:12px 0}
+#direction-brief>label>span{font-size:10px;color:var(--muted)}
+#direction-room textarea,#direction-room input,#direction-room select{width:100%;min-width:0;font:inherit}#direction-room textarea{resize:vertical;line-height:1.6}
+#direction-brief{border:0;border-top:1px solid var(--line);padding:12px 0;margin:4px 0}#direction-brief summary{font-size:12px;font-weight:600;cursor:pointer}
+#direction-room .small{font-size:11px;line-height:1.65;margin:10px 0;overflow-wrap:anywhere}
+#direction-plan,#direction-apply{width:100%;font-size:12px;padding:11px 10px}
+.studio-app .direction-candidate{display:flex;width:100%;text-align:left;gap:10px;padding:8px 0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}
+.direction-candidate>span:last-child{min-width:0;flex:1}.direction-candidate strong{font-size:12px;line-height:1.5;display:block;overflow-wrap:anywhere}.direction-candidate small{display:block;font-size:10px;color:var(--muted);line-height:1.6}
+.direction-thumb{width:70px;height:50px;flex-shrink:0;overflow:hidden;background:#111821;border-radius:4px}.direction-thumb video,.direction-thumb img{width:100%;height:100%;object-fit:cover}
+#direction-review:not(:empty){margin-top:18px;border-top:2px solid var(--accent);padding-top:14px}.direction-goal{font-size:12px;line-height:1.65;color:var(--accent)}
+.direction-observation{font-size:12px;line-height:1.65;margin:14px 0;padding-left:11px;border-left:2px solid #67849a;overflow-wrap:anywhere}.direction-observation span,.direction-observation small{display:block;color:var(--muted);font-size:10px}
+.direction-actions{display:flex;gap:6px}.direction-actions button{font-size:10px;padding:8px}.direction-checks{padding:10px 0;margin:12px 0 0;border:0}.direction-checks legend{font-size:12px;font-weight:600}.direction-checks .check{display:flex;align-items:flex-start;font-size:11px;line-height:1.6;gap:8px;margin:9px 0}.direction-checks input[type="checkbox"]{width:14px;min-width:14px;margin:3px 0;accent-color:var(--accent)}
+.direction-empty{font-size:12px;line-height:1.7;padding:12px 0;color:var(--muted)}
+.studio-app .tool-tabs [role="tab"]{min-width:0;padding-left:5px;padding-right:5px;font-size:10px}
+#direction-room .direction-checks input[type="checkbox"]{width:14px;min-width:14px;max-width:14px;flex:0 0 14px;margin:3px 0}

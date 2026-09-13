@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#171d25">
 <title>Shutter · Studio</title>
+<link rel="stylesheet" href="/direction-room.css">
 <link rel="stylesheet" href="/media-studio.css"><link rel="stylesheet" href="/memory-room.css"><link rel="stylesheet" href="/api/media/generate-room.css"><link rel="stylesheet" href="/music-room.css"><link rel="stylesheet" href="/sound-room.css"><link rel="stylesheet" href="/delivery-room.css"><link rel="stylesheet" href="/color-room.css"><link rel="stylesheet" href="/text-room.css"><link rel="stylesheet" href="/media-health-room.css"><link rel="stylesheet" href="/studio-workspace.css">
 <script type="module" src="/media-studio.js"></script><script type="module" src="/api/media/generate-room.js"></script>
 </head>
@@ -58,11 +59,12 @@
     </section>
   </div>
   <aside id="workspace-tools" class="panel" aria-label="Selected material and shot tools">
-    <nav class="tool-tabs" role="tablist" aria-label="Shot tools"><button id="tool-source" role="tab" aria-selected="true" data-tool-target="source">Source</button><button id="tool-takes" role="tab" aria-selected="false" data-tool-target="takes">Takes</button><button id="tool-generate" role="tab" aria-selected="false" data-tool-target="generate">Generate</button><button id="tool-moments" role="tab" aria-selected="false" data-tool-target="moments">Moments</button></nav>
+    <nav class="tool-tabs" role="tablist" aria-label="Shot tools"><button id="tool-source" role="tab" aria-selected="true" data-tool-target="source">Source</button><button id="tool-director" role="tab" aria-selected="false" data-tool-target="director">Director</button><button id="tool-takes" role="tab" aria-selected="false" data-tool-target="takes">Takes</button><button id="tool-generate" role="tab" aria-selected="false" data-tool-target="generate">Generate</button><button id="tool-moments" role="tab" aria-selected="false" data-tool-target="moments">Moments</button></nav>
     <div class="tool-body">
       <section id="source-panel" class="viewer-panel" role="tabpanel" aria-labelledby="tool-source"><div class="section-title"><h2 id="source-title">A closer look</h2><span id="source-kind" class="tag">Source</span></div><div id="source-view" class="viewer empty">Select material to preview it.<br>Your film stays in view.</div><div id="source-details" class="small"></div><div id="source-actions"></div></section>
       <section id="memory-room" class="panel" aria-label="Production Memory and Take Stacks" hidden></section>
       <section id="generate-room" class="panel" aria-label="Governed generative inserts" hidden></section>
+      <section id="direction-room" class="panel" role="tabpanel" aria-labelledby="tool-director" hidden></section>
     </div>
   </aside>
 </main>

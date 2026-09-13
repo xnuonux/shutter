@@ -1,6 +1,6 @@
-# Current checkpoint: the focused studio workspace
+# Current checkpoint: scene direction and reviewed shot proposals
 
-September 12, 2026. The focused studio workspace is now implemented and verified. Read [the workspace result](studio-workspace-2026-09-12.md) first. Codex has taken over the cumulative ChatGPT work. Start here, then read [the integration result](takeover-integration-2026-09-12.md) and [the approved vision](../VISION.md). Historical checkpoints and their stale budget snapshots are preserved in [the earlier checkpoint archive](checkpoint-before-takeover-2026-09-12.md).
+September 12, 2026. Studio now connects shot direction and continuity notes to source-backed proposals, real Program audition, and explicit acceptance with saved undo. Read [the direction result](scene-direction-2026-09-12.md) first, then [the workspace result](studio-workspace-2026-09-12.md). Codex has taken over the cumulative ChatGPT work. The [integration result](takeover-integration-2026-09-12.md) and [approved vision](../VISION.md) remain the larger context. Historical checkpoints and stale budget snapshots are preserved in [the earlier checkpoint archive](checkpoint-before-takeover-2026-09-12.md).
 
 ## Current source and working proof
 
@@ -24,6 +24,8 @@ New Angle remains a continuation after the target shot. It currently refuses a m
 
 Material, Program and Timeline now form a persistent workspace with contextual Generate / Takes / Moments tools. Sound, Finish and Deliver have focused views. Compact and full desktop layouts and mobile access were inspected. The redesigned UI passed 16 real workspace checks, 12 real editing/export checks, 38 combined room-component checks and 11 Generate component checks. Full Node suite remains 469 passed, zero failed, two Windows privilege skips. Navigation preserves the saved cut; recovery and unfinished generation targets are protected. See the dated workspace result for exact evidence and limitations.
 
-Next: connect scene intent and continuity notes to explicit shot proposals in this workspace, using the existing typed edit operations and artist acceptance. Pixel orchestration and semantic scene understanding remain unfinished. Keep providers deferred and use existing footage while developing the proposal handoff; refresh actual balance and receipts before further paid studies.
+That milestone is now implemented in Director. Briefs and proposal snapshots persist in the existing journal and export with Production Memory. Matching uses artist-authored words; continuity remains explicitly artist-reviewed. Source replacement preserves shot timing, camera coverage, song, sound and text, and retains the original take. Full verification is now 481 Node tests (479 passed, zero failed, two existing Windows skips), 14 real Director browser checks and 16 existing workspace browser checks. See the direction result for exact scope and evidence.
+
+Next: let Director propose existing alternate coverage for a specified interval on the shared scene clock, with explicit source alignment and the same audition/accept/undo path. The current proposal changes a main shot's source only. Pixel orchestration, semantic scene understanding and synchronized alternate-camera generation remain unfinished. Keep providers deferred and use existing footage; refresh actual balance and receipts before further paid studies.
 
 Evidence: `outputs/shutter/takeover-integration/` in task `01a087ae-15fc-7e43-8eb2-126e7883d103`; full local paths and reproduction commands are in the integration result. Keep raw receipts and exploration cold. Read the approved vision and product blueprint before expanding scope.

@@ -6,6 +6,7 @@ import {applyGeneratedInsert} from './generative-insert-apply.mjs';
 import {saveMoment,deleteMoment,searchMoments,getTakeStack,collectTake,acceptTake,exportProductionMemory} from './production-memory.mjs';
 import {scoutAsset,readScoutImage} from './media-scout.mjs';
 import {mediaExclusive} from './media-io.mjs';
+import {readShotDirection,saveShotDirection,proposeShots,acceptShotProposal} from './shot-direction.mjs';
 const publicRoot=fileURLToPath(new URL('../public/',import.meta.url));
 async function body(req){let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>65536)throw Error('request_too_large');chunks.push(chunk);}return JSON.parse(Buffer.concat(chunks).toString('utf8')||'{}');}
 const json=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(data));};
@@ -14,11 +15,20 @@ export async function handleMemoryRequest(studio,req,res,url){
   const generateStatic={'/api/media/generate-room.js':['generate-room.js','text/javascript'],'/api/media/generate-room.css':['generate-room.css','text/css']};
   if(req.method==='GET'&&generateStatic[url.pathname]){const [name,type]=generateStatic[url.pathname];res.writeHead(200,{'content-type':type,'cache-control':'no-cache','x-content-type-options':'nosniff'});res.end(await fsp.readFile(path.join(publicRoot,name)));return true;}
   const p=url.pathname.split('/').filter(Boolean);
-  const production=p[0]==='api'&&p[1]==='media'&&p[2]==='productions'&&['memory','takes','memory-export','inserts'].includes(p[4]);
+  const production=p[0]==='api'&&p[1]==='media'&&p[2]==='productions'&&['memory','takes','memory-export','inserts','direction'].includes(p[4]);
   const scout=p[0]==='api'&&p[1]==='media'&&((p[2]==='assets'&&p[4]==='scout')||p[2]==='scouts');
   if(!production&&!scout)return false;
   const abort=new AbortController(),cancel=()=>{if(!res.writableEnded)abort.abort();};res.once('close',cancel);if(res.destroyed)abort.abort();
   try {
+    if(production&&p[4]==='direction'&&p.length===6){
+      if(req.method==='GET'){json(res,200,readShotDirection(studio,p[3],p[5]));return true;}
+      if(req.method==='PUT'){json(res,200,saveShotDirection(studio,p[3],p[5],await body(req)));return true;}
+    }
+    if(production&&p[4]==='direction'&&p.length===7&&req.method==='POST'){
+      const input=await body(req);
+      if(p[6]==='proposals'){json(res,201,proposeShots(studio,p[3],p[5],input));return true;}
+      if(p[6]==='accept'){json(res,200,await mediaExclusive(studio,()=>acceptShotProposal(studio,p[3],p[5],input)));return true;}
+    }
     if(production&&p[4]==='memory'&&p.length===5){
       if(req.method==='GET'){
         const favorite=url.searchParams.get('favorite');if(favorite!==null&&!['true','false'].includes(favorite))throw Error('memory_search_options');

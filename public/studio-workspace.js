@@ -1,7 +1,7 @@
 /** Workspace navigation changes presentation only; the existing rooms own edits. */
 export class StudioWorkspace {
-  constructor({room,memory,getEdit}) {
-    Object.assign(this,{room,memory,getEdit});this.mode='edit';this.tool='source';
+  constructor({room,memory,direction,getEdit}) {
+    Object.assign(this,{room,memory,direction,getEdit});this.mode='edit';this.tool='source';
     this.$=s=>document.querySelector(s);
     for(const button of document.querySelectorAll('[data-mode-target]'))button.onclick=()=>this.openMode(button.dataset.modeTarget);
     for(const button of document.querySelectorAll('[data-tool-target]'))button.onclick=()=>this.openTool(button.dataset.toolTarget);
@@ -28,6 +28,7 @@ export class StudioWorkspace {
     for(const id of ['save','undo','redo'])this.$('#'+id).disabled=blocked;
     this.$('.format-settings').inert=blocked;
     this.$('#cut-generate').disabled=this.$('#cut-takes').disabled=blocked||!this.room.selected;
+    this.direction?.refreshStatus();
     const active=document.querySelector(`[data-mode-target="${this.mode}"]`);if(active)active.setAttribute('aria-selected','true');
   }
   openMode(mode){
@@ -39,11 +40,12 @@ export class StudioWorkspace {
     if(mode==='edit')requestAnimationFrame(()=>this.room.resize());
   }
   openTool(tool){
-    if(!['source','takes','generate','moments'].includes(tool))return;
+    if(!['source','takes','generate','moments','director'].includes(tool))return;
     this.tool=tool;document.body.dataset.tool=tool;
     this.showMaterial(false,false);
     for(const button of document.querySelectorAll('[data-tool-target]')){const selected=button.dataset.toolTarget===tool;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;}
     this.$('#source-panel').hidden=tool!=='source';this.$('#generate-room').hidden=tool!=='generate';this.$('#memory-room').hidden=!['takes','moments'].includes(tool);
+    const direction=this.$('#direction-room');if(direction){direction.hidden=tool!=='director';if(tool==='director')direction.dispatchEvent(new CustomEvent('shutter:focus-shot',{detail:{clipId:this.room.selected}}));}
     if(tool==='generate'){
       this.$('#generate-room > details')?.setAttribute('open','');
       this.$('#generate-room').dispatchEvent(new CustomEvent('shutter:focus-shot',{detail:{clipId:this.room.selected}}));
