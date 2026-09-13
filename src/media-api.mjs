@@ -1,14 +1,12 @@
 import {handleMemoryRequest} from './memory-api.mjs';
+import {actionCatalog,directorContext,previewActions,applyActions,actionReceipt,commandProfiles} from './director-actions.mjs';
+import {applyTimelineCommand} from '../public/edit-actions.mjs';
 import {checkMediaHealth,restoreMissingAsset} from './media-recovery.mjs';
-import {applyTextEdit} from '../public/text-edit.mjs';
 import {importColorLut, previewColor, prepareColor} from './media-color.mjs';
 import {checkDelivery} from './media-delivery.mjs';
 import {renderListeningMix} from './media-sound.mjs';
-import {applySoundEdit} from '../public/sound-edit.mjs';
 import fs from 'node:fs';
 import { analyzeWaveform, readWaveform } from './media-waveform.mjs';
-import { applyEdit } from '../public/music-edit.mjs';
-import { getMediaProfile } from './media-io.mjs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +34,18 @@ export async function handleMediaRequest(studio,req,res,url) {
   if(await handleMemoryRequest(studio,req,res,url))return true;
   const parts=url.pathname.split('/').filter(Boolean);
   try {
+    if(req.method==='GET'&&url.pathname==='/api/media/actions'){
+      json(res,200,actionCatalog(url.searchParams.has('types')?url.searchParams.get('types').split(','):[]));return true;
+    }
+    if(req.method==='GET'&&url.pathname==='/api/media/action-context'){
+      json(res,200,directorContext(studio,{projectId:url.searchParams.get('projectId')||undefined,assetOffset:Number(url.searchParams.get('assetOffset')??0),assetLimit:Number(url.searchParams.get('assetLimit')??30)}));return true;
+    }
+    if(parts[2]==='productions'&&parts[4]==='actions'){
+      if(req.method==='GET'&&parts.length===7&&parts[5]==='receipts'){json(res,200,actionReceipt(studio,parts[3],decodeURIComponent(parts[6])));return true;}
+      if(req.method==='POST'&&parts.length===6&&['preview','apply'].includes(parts[5])){
+        const fn=parts[5]==='preview'?previewActions:applyActions;json(res,200,fn(studio,parts[3],await body(req)));return true;
+      }
+    }
     if(req.method==='POST'&&parts.length===5&&((parts[2]==='productions'&&parts[4]==='media-health')||(parts[2]==='assets'&&parts[4]==='restore'))) {
       const abort=new AbortController(),cancel=()=>{if(!res.writableEnded)abort.abort();};res.once('close',cancel);
       if(res.destroyed)abort.abort();
@@ -87,16 +97,8 @@ export async function handleMediaRequest(studio,req,res,url) {
       const input=await body(req),record=studio.getTimeline(parts[3]);
       if(record.timeline.format!==MEDIA_EDIT_FORMAT)throw Error('media_edit_required');
       if(!Number.isSafeInteger(input.baseRevision)||record.revision!==input.baseRevision)throw Error('revision_conflict');
-      if(typeof input.command?.type==='string'&&input.command.type.startsWith('text-')) {
-        json(res,200,studio.saveTimeline(parts[3],input.baseRevision,applyTextEdit(record.timeline,input.command)));return true;
-      }
-      if(typeof input.command?.type==='string'&&input.command.type.startsWith('sound-')) {
-        json(res,200,studio.saveTimeline(parts[3],input.baseRevision,applySoundEdit(record.timeline,input.command)));return true;
-      }
-      const ids=new Set(record.timeline.clips.map(c=>c.assetId));
-      if(input.command?.assetId)ids.add(input.command.assetId);
-      const profiles=new Map([...ids].map(id=>[id,getMediaProfile(studio,id)]));
-      const next=applyEdit(record.timeline,input.command,profiles);
+      const profiles=commandProfiles(studio,record.timeline,[input.command||{}]);
+      const next=applyTimelineCommand(record.timeline,input.command,profiles);
       json(res,200,studio.saveTimeline(parts[3],input.baseRevision,next));return true;
     }
     if(req.method==='POST'&&parts.length===5&&parts[2]==='assets'&&parts[4]==='probe') {json(res,200,await mediaExclusive(studio,()=>ensureMediaProfile(studio,parts[3])));return true;}

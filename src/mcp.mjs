@@ -3,6 +3,7 @@
  * Only the listed production commands are exposed; no shell or arbitrary Python tool.
  */
 import { createInterface } from "node:readline";
+import {ACTION_VERSION,validateSchema} from '../public/action-contract.mjs';
 const base = process.env.SHUTTER_URL || "http://127.0.0.1:4677";
 const address = new URL(base);
 if (
@@ -17,7 +18,13 @@ const object = (properties, required = []) => ({
   required,
   additionalProperties: false,
 });
+const actionInput={projectId:id,version:{const:ACTION_VERSION},baseRevision:{type:'integer',minimum:0},commands:{type:'array',minItems:1,maxItems:32,items:{type:'object'}}};
 const definitions = [
+  ['shutter_action_catalog','Discover Studio editing actions and effects. Omit types for compact summaries; supply action types for exact input schemas and examples. Read this before planning edits. No generation or spending.',object({types:{type:'array',maxItems:31,items:id}}),true],
+  ['shutter_studio_context','Read Studio productions and a bounded page of local source metadata. With projectId, return the saved edit, exact scene/source ranges, revision, warnings and undo/redo availability. No media processing or provider calls.',object({projectId:id,assetOffset:{type:'integer',minimum:0},assetLimit:{type:'integer',minimum:1,maximum:100}}),true],
+  ['shutter_preview_actions','Preview 1-32 ordered Studio actions against the observed revision without saving. Returns exact resulting timeline, visible source intervals, changed fields and previewHash. Discover command schemas first. Undo or redo must be standalone.',object(actionInput,Object.keys(actionInput)),true],
+  ['shutter_apply_actions','Apply the exact previewed Studio batch as one reversible edit. Requires its unchanged version, revision, commands and previewHash plus a stable requestKey. Retry identical input with the same key after an uncertain response; changed input conflicts. Never claims creative continuity approval.',object({...actionInput,previewHash:{type:'string',pattern:'^[a-f0-9]{64}$'},requestKey:id},[...Object.keys(actionInput),'previewHash','requestKey']),false],
+  ['shutter_action_receipt','Read the persisted outcome for a Studio action requestKey. revision is the original applied revision; currentRevision may be later. A missing receipt is not evidence of success.',object({projectId:id,requestKey:id},['projectId','requestKey']),true],
   ['shutter_get_timeline','Read the same saved scene timeline and exact source ranges as the visual editor. Coverage replaces picture without adding time; audio follows main footage.',object({projectId:id},['projectId']),true],
   ['shutter_save_timeline','Save a reversible edit to the observed timeline revision. Use integer source frames, stable clip IDs and ready takes. Does not generate video or spend credits. Read the timeline again on conflict.',object({projectId:id,baseRevision:{type:'integer',minimum:0},timeline:{type:'object'}},['projectId','baseRevision','timeline']),false],
   [
@@ -89,8 +96,8 @@ const tools = definitions.map(
     annotations: {
       readOnlyHint,
       destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
+      idempotentHint: readOnlyHint || ['shutter_prepare_shot','shutter_apply_actions','shutter_render_shot'].includes(name),
+      openWorldHint: ['shutter_prepare_shot','shutter_render_shot'].includes(name),
     },
   }),
 );
@@ -106,34 +113,25 @@ async function api(route, body, method = "POST") {
   return result;
 }
 function validate(schema, value) {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new Error("Arguments must be an object.");
-  for (const key of schema.required)
-    if (value[key] === undefined) throw new Error("Missing argument: " + key);
-  for (const [key, v] of Object.entries(value)) {
-    const rule = schema.properties[key];
-    if (!rule) throw new Error("Unknown argument: " + key);
-    if (
-      rule.type === "string" &&
-      (typeof v !== "string" || !v.length || v.length > rule.maxLength)
-    )
-      throw new Error("Invalid " + key);
-    if (
-      rule.type === "integer" &&
-      (!Number.isSafeInteger(v) || v < rule.minimum)
-    )
-      throw new Error("Invalid " + key);
-    if (
-      rule.type === "object" &&
-      (!v || typeof v !== "object" || Array.isArray(v))
-    )
-      throw new Error("Invalid " + key);
-  }
+  return validateSchema(schema,value);
+}
+function recovery(code){
+  if(code==='revision_conflict'||code==='action_preview_conflict')return 'Read shutter_studio_context again and preview against the current revision before applying.';
+  if(code==='action_request_conflict')return 'Read shutter_action_receipt for that key. Use a new key only for a deliberately different edit.';
+  if(code==='not_found')return 'Discover current productions and source IDs. A missing receipt is not a successful edit.';
+  return 'Read the relevant action schemas and current Studio context; correct the input before retrying.';
 }
 async function invoke(name, args) {
   const definition = tools.find((t) => t.name === name);
   if (!definition) throw new Error("Unknown tool.");
   validate(definition.inputSchema, args);
+  if(name==='shutter_action_catalog')return api('/api/media/actions'+(args.types?.length?'?types='+encodeURIComponent(args.types.join(',')):''));
+  if(name==='shutter_studio_context')return api('/api/media/action-context?'+new URLSearchParams(Object.entries(args).map(([key,value])=>[key,String(value)])));
+  if(['shutter_preview_actions','shutter_apply_actions','shutter_action_receipt'].includes(name)){
+    const {projectId,...input}=args,route='/api/media/productions/'+encodeURIComponent(projectId)+'/actions/';
+    if(name==='shutter_action_receipt')return api(route+'receipts/'+encodeURIComponent(input.requestKey));
+    return api(route+(name==='shutter_preview_actions'?'preview':'apply'),input);
+  }
   if(name==='shutter_get_timeline'||name==='shutter_save_timeline'){
     const route='/api/productions/'+encodeURIComponent(args.projectId)+'/timeline';
     const result=await (name==='shutter_get_timeline'?api(route):api(route,{baseRevision:args.baseRevision,timeline:args.timeline},'PUT'));
@@ -233,7 +231,7 @@ async function receive(line) {
       capabilities: { tools: { listChanged: false } },
       serverInfo: { name: "shutter-local", version: "0.1.0" },
       instructions:
-        "Use exact local asset and job IDs. A decoded take is not continuity approval. Never invent a render result or repeat an unknown submission. This server does not start the local renderer.",
+        "For Studio editing, discover shutter_action_catalog, read shutter_studio_context, preview and then apply exact commands with a stable requestKey. Use receipt lookup after uncertainty. Scene positions are output frames, source positions are exact seconds and sound positions are 48000 Hz sample frames. Legacy shot tools remain available. Use exact local IDs. A decoded take or successful edit is not continuity approval. Never invent a render result or repeat an unknown submission. This server does not start the local renderer.",
     });
   }
   if (message.method === "ping") return reply({});
@@ -253,6 +251,7 @@ async function receive(line) {
       return reply({
         isError: true,
         content: [{ type: "text", text: e.message }],
+        structuredContent: {error:e.message,recovery:recovery(e.message)},
       });
     }
   }

@@ -151,6 +151,11 @@ export function applyEdit(edit, command, profiles) {
   const selected = () => { if (index < 0) fail('clip_not_found'); return next.clips[index]; };
   const freshId = id => { if (!identity(id) || next.clips.some(c => c.id === id)) fail('new_clip_identity'); return id; };
   switch (op.type) {
+    case 'insert': {
+      if (!int(op.toIndex,0,next.clips.length)) fail('move_index');
+      if (!op.clip) fail('media_clip_invalid');
+      freshId(op.clip.id); next.clips.splice(op.toIndex,0,structuredClone(op.clip)); break;
+    }
     case 'split': {
       if (!int(op.frame)) fail('timeline_frame');
       const c = selected(), p = placements(next)[index], left = op.frame - p.at;
@@ -188,10 +193,17 @@ export function applyEdit(edit, command, profiles) {
     }
     case 'music': next.music = normalizeMusic(op.music); break;
     case 'coverage-add': next.coverage=[...(next.coverage||[]),structuredClone(op.coverage)];break;
+    case 'coverage-update': {
+      const at=(next.coverage||[]).findIndex(c=>c.id===op.coverageId);
+      if(at<0)fail('coverage_not_found');
+      if(op.coverage?.id!==op.coverageId)fail('coverage_identity');
+      next.coverage[at]=structuredClone(op.coverage);break;
+    }
     case 'coverage-remove': {
       if(!(next.coverage||[]).some(c=>c.id===op.coverageId))fail('coverage_not_found');
       next.coverage=next.coverage.filter(c=>c.id!==op.coverageId);break;
     }
+    case 'soundtrack': next.soundtrack=structuredClone(op.soundtrack);break;
     default: fail('edit_command_unsupported');
   }
   return validateVisuals(next, profiles);

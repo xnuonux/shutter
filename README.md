@@ -66,6 +66,8 @@ Once ComfyUI is online, render a prepared shot from the app. For the explicitly 
 
 `src/mcp.mjs` is a local stdio MCP server. `mcp.example.json` contains an example client configuration; no global Codex or Claude configuration was changed. Start the Shutter app first. An MCP client can list productions and assets, inspect cast and Blender camera metadata, revise a shot with an observed revision, prepare idempotently, submit an authorized local render and read the resulting job.
 
+Studio now exposes **31 reversible editing actions** through a versioned catalog. A director can discover schemas, read exact project/source context, preview a batch and apply it once with saved undo and durable retry receipts. The new tools are `shutter_action_catalog`, `shutter_studio_context`, `shutter_preview_actions`, `shutter_apply_actions` and `shutter_action_receipt`. Read [the Director action guide](docs/director-action-guide.md) for timing units, request sequencing, applicability checks and current boundaries. These editing tools perform no paid generation.
+
 The bridge uses the same HTTP commands as the browser. It does not execute arbitrary code, start ComfyUI, modify an open Blender session or provide hosted model credits. Protocol negotiation and real saved edits/preparation are tested through a subprocess and the actual HTTP server. A live Claude connection has not been tested.
 
 ## Verification and backup

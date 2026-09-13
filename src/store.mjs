@@ -376,7 +376,7 @@ export class Studio {
     }
     return {...record,plan:this.timelinePlan(id,record.timeline)};
   }
-  saveTimeline(id,baseRevision,timeline,action='save') {
+  saveTimeline(id,baseRevision,timeline,action='save',actionReceipt=null) {
     return this.transaction(()=>{
       const current=this.getTimeline(id);
       if(current.revision!==baseRevision)throw Error('revision_conflict');
@@ -388,6 +388,10 @@ export class Studio {
       }else{past=[...past,current.timeline].slice(-100);future=[];}
       const plan=this.timelinePlan(id,next);
       const record=this.write('timeline',{id:current.id,projectId:id,revision:current.revision+1,timeline:next,past,future,hash:plan.hash,updatedAt:new Date().toISOString()});
+      if(actionReceipt){
+        if(this.db.prepare('SELECT id FROM records WHERE id=?').get(actionReceipt.id))throw Error('action_receipt_identity_conflict');
+        this.write('edit-action-receipt',actionReceipt);
+      }
       return {...record,plan};
     });
   }
