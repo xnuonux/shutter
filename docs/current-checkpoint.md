@@ -16,6 +16,8 @@ Review: `http://127.0.0.1:4688/media-studio?project=prod_ad7f5bab-936e-4490-8838
 
 Canonical checkout: `C:/dev/shutter`, branch `codex/shared-scene-timeline`. Retained integration worktree: `C:/dev/.worktrees/shutter-integration-20260912`, branch `codex/shutter-integration-20260912`. This milestone follows scene-direction code `08c8480` and handoff `ec74c6b`. Exact integration and preservation observations are recorded in the dated cutaway result. Remote draft PRs and deployments remain unchanged.
 
+Cutaway code `1d15baf` is integrated locally. Three canonical browser checks passed. Before/after journal snapshots match exactly: **78 records and 19 request entries**, digest `7d9b4326b5dd79bf02451228aecda069af83cf9227b5a326728d34da43013663`.
+
 Studio at `/media-studio` includes Material, Program, Timeline, Director, Generate, Takes, Moments, Sound, Finish, Deliver and recovery. Original Direct/Canvas/Moment and the main/coverage productions remain available. Preserve Lunari, Moment, Blender and all original creative records. Runtime configuration is in the retained worktree's `work/env.ps1` and `work/serve.mjs`; recheck current process ownership before restarting.
 
 ## Spending and unfinished work

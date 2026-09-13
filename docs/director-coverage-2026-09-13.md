@@ -23,6 +23,8 @@ The browser work exposed two real interaction failures. Brief controls are now d
 
 No paid provider was contacted and this milestone spent **$0**. Tests used disposable review data. The canonical journal is checked before and after local integration.
 
+Code `1d15baf` is integrated locally into the canonical checkout. Three read-only canonical browser checks passed, including the original rain scene editor. All **78 records and 19 request entries** match exactly before and after integration, with ordered raw-SQL `{rows,requests}` digest `7d9b4326b5dd79bf02451228aecda069af83cf9227b5a326728d34da43013663`. No data migration was required. At integration, canonical server localhost4677 was PID 17912 and review server localhost4688 was PID 25456; these are observations, not permanent identities. No remote merge or deployment occurred.
+
 ## Scope and next work
 
 The edit clock and source alignment are explicit and enforced. Whether the orb, hands, movement and background actually match is still an artist judgment. Matching searches saved source words; no semantic video model or Pixel orchestration was introduced. Automatically synchronized alternate-camera generation remains unfinished.
