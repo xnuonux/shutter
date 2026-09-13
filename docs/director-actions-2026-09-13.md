@@ -23,6 +23,8 @@ Five MCP tools expose the path: catalog, context, preview, apply and receipt loo
 
 The broad suite caught malformed sound input being looked up as an asset before schema validation. Validation now runs first, preserving the existing command endpoint's 400 response and atomic rejection. All verification uses disposable project state and existing or local test media. This milestone spent **$0** and made no paid provider calls.
 
+Code `db9a436` is integrated locally into `C:/dev/shutter`. The canonical app passed three read-only browser checks and live discovery returned `shutter-actions-v1` with 31 actions. Before/after snapshots match exactly: **78 records, 19 request entries**, ordered raw-SQL `{rows,requests}` digest `7d9b4326b5dd79bf02451228aecda069af83cf9227b5a326728d34da43013663`. No original creative data was changed. Canonical server localhost4677 was PID 38008 at verification.
+
 ## Boundaries and continuation
 
 Determinism applies to validated edit execution against an observed state. It does not make creative interpretation deterministic or establish semantic continuity. Schemas describe structural inputs; the compiler still rejects unavailable source handles, wrong media kinds, invalid coverage and complete-timeline conflicts. An edit operation never records artist continuity approval on its own.
@@ -38,3 +40,5 @@ Implementation: `public/action-contract.mjs`, `public/edit-actions.mjs`, `src/di
 Retained worktree: `C:/dev/.worktrees/shutter-integration-20260912`. Runtime: `work/env.ps1`, `work/serve.mjs`, `work/test-python/Scripts/python.exe`. Suite command: `node --test --test-concurrency=2 test/*.test.mjs`. Browser regression: `test/browser/direction-studio.py` against the disposable review server. Source state is integrated locally after verification; no remote merge or deployment is part of this milestone.
 
 Evidence is retained in task `01a087ae-15fc-7e43-8eb2-126e7883d103` under `outputs/shutter/director-actions-2026-09-13/`: final suite output, targeted and browser results, original red failures, canonical preservation snapshots and this result. Global client configuration remains unchanged; [mcp.example.json](../mcp.example.json) identifies the connection.
+
+Runtime note: the review server on localhost4688 remains PID 18400. A combined verification/review-restart command was rejected by automatic approval review with only `blocked by policy`. The task finished using separate read-only verification of the already updated canonical app. That review process lacks the final malformed-input validation-order correction; use canonical4677 for the final action contract. Recheck ownership and authorization before any later restart.

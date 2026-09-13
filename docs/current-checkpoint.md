@@ -18,6 +18,8 @@ Review: `http://127.0.0.1:4688/media-studio?project=prod_ad7f5bab-936e-4490-8838
 
 ## Local source and preservation
 
+Action code `db9a436` is integrated locally. The canonical app on localhost4677 (PID 38008 at verification) passed three read-only browser checks and live 31-action discovery. All 78 records and 19 request entries still match the preservation digest below. Use canonical4677 for the final action interface; review4688's process does not include the last malformed-input correction. See the action result for the blocked optional review restart and completed canonical verification.
+
 Canonical checkout: `C:/dev/shutter`, branch `codex/shared-scene-timeline`. Retained integration worktree: `C:/dev/.worktrees/shutter-integration-20260912`, branch `codex/shutter-integration-20260912`. This milestone follows scene-direction code `08c8480` and handoff `ec74c6b`. Exact integration and preservation observations are recorded in the dated cutaway result. Remote draft PRs and deployments remain unchanged.
 
 Cutaway code `1d15baf` is integrated locally. Three canonical browser checks passed. Before/after journal snapshots match exactly: **78 records and 19 request entries**, digest `7d9b4326b5dd79bf02451228aecda069af83cf9227b5a326728d34da43013663`.
