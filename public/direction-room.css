@@ -15,3 +15,4 @@
 .direction-empty{font-size:12px;line-height:1.7;padding:12px 0;color:var(--muted)}
 .studio-app .tool-tabs [role="tab"]{min-width:0;padding-left:5px;padding-right:5px;font-size:10px}
 #direction-room .direction-checks input[type="checkbox"]{width:14px;min-width:14px;max-width:14px;flex:0 0 14px;margin:3px 0}
+#direction-coverage{border:0;padding:12px 0;margin:0}#direction-coverage legend{font-size:12px;color:var(--accent)}.direction-range{display:grid;grid-template-columns:1fr 1fr;gap:10px}#direction-coverage label{display:flex;flex-direction:column;gap:6px;font-size:11px;margin:9px 0}.direction-return{font-size:12px;line-height:1.6;color:#9ccebd;border-left:2px solid #629d87;padding-left:10px}.studio-app .direction-alignment{display:flex;align-items:flex-start;gap:8px;font-size:11px;line-height:1.6}#direction-room .direction-alignment input{width:14px;min-width:14px;max-width:14px;flex:0 0 14px;margin:3px 0;accent-color:var(--accent)}

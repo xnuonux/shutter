@@ -131,6 +131,7 @@ export class MusicRoom {
     }
     ctx.fillStyle='#1b2827';ctx.fillRect(0,74,w,26);
     for(const c of edit.coverage||[]){const px=x(c.at),cw=Math.max(1,x(c.frames));ctx.fillStyle='#385b52';ctx.fillRect(px+1,75,Math.max(1,cw-2),24);ctx.save();ctx.beginPath();ctx.rect(px+4,75,Math.max(0,cw-8),24);ctx.clip();ctx.fillStyle='#d5e9dc';ctx.fillText('COVERAGE · '+(this.getState().assets.find(a=>a.id===c.assetId)?.name||'Alternate'),px+6,91);ctx.restore();}
+    if(this.audition?.coverage){const c=this.audition.coverage,px=x(c.at),cw=x(c.frames);ctx.save();ctx.strokeStyle='#e6bc7a';ctx.setLineDash([5,3]);ctx.strokeRect(px+1,76,Math.max(1,cw-2),22);ctx.beginPath();ctx.rect(px+4,76,Math.max(0,cw-8),22);ctx.clip();ctx.fillStyle='#e6bc7a';ctx.fillText('AUDITION',px+6,91);ctx.restore();}
     if(this.wave){
       const wave=this.wave;for(let c=0;c<wave.channels;c++){const y=126+c*42,amp=18;ctx.strokeStyle=c?'#71a398':'#9db4cc';ctx.beginPath();const peaks=wave.peaks[c];
         for(let px=0;px<w;px++){const a=Math.floor(px/w*extent/this.fps()*wave.sampleRate/wave.samplesPerBin),b=Math.min(peaks.length/2-1,Math.floor((px+1)/w*extent/this.fps()*wave.sampleRate/wave.samplesPerBin));if(a>=peaks.length/2)break;let min=1,max=-1;for(let i=a;i<=Math.max(a,b);i++){min=Math.min(min,peaks[i*2]);max=Math.max(max,peaks[i*2+1]);}ctx.moveTo(px,y-Math.max(-1,Math.min(1,max))*amp);ctx.lineTo(px,y-Math.max(-1,Math.min(1,min))*amp);}ctx.stroke();ctx.fillStyle='#9babb8';ctx.fillText(wave.channels===1?'MONO':c?'R':'L',4,y-20);}
@@ -149,7 +150,7 @@ export class MusicRoom {
     if(this.getEdit().soundStage&&!this.monitorId())throw Error('Save & build the current listening mix in Sound Stage before playback.');
     if(!totalFrames(this.getEdit())&&!this.getEdit().soundtrack)throw Error('Add your song or a shot before playing.');
     if(this.frame>=this.playEnd())this.seek(0);
-    const loop=placements(this.getEdit()).find(c=>c.id===this.selected);if(this.$('#cut-loop').checked&&loop&&(this.frame<loop.at||this.frame>=loop.end))this.seek(loop.at);
+    const loop=this.loopSelection();if(this.$('#cut-loop').checked&&loop&&(this.frame<loop.at||this.frame>=loop.end))this.seek(loop.at);
     const source=this.program.ownerDocument.querySelector('#source-view video, #source-view audio');source?.pause();
     this.anchor={seconds:this.frame/this.fps(),wall:performance.now()};
     if(this.monitorId()&&(!Number.isFinite(this.audio.duration)||this.anchor.seconds<this.audio.duration)){
@@ -163,7 +164,7 @@ export class MusicRoom {
     if(!this.playing)return;
     const seconds=this.monitorId()&&!this.audio.ended&&!this.audio.paused?this.audio.currentTime:this.anchor.seconds+(performance.now()-this.anchor.wall)/1000;
     this.frame=Math.floor(seconds*this.fps()+1e-7);
-    const selected=placements(this.getEdit()).find(c=>c.id===this.selected);
+    const selected=this.loopSelection();
     if(this.$('#cut-loop').checked&&selected&&this.frame>=selected.end){this.seek(selected.at);}
     else if(this.frame>=this.playEnd()){this.frame=this.playEnd();this.pause();this.showPicture();this.draw();return;}
     this.showPicture();this.positionLabel();this.draw();this.animation=requestAnimationFrame(()=>this.tick());
@@ -175,11 +176,21 @@ export class MusicRoom {
     this.program.querySelector('#program-note').textContent='AUDITION ONLY — '+candidate.label+'. The saved cut and sound are unchanged.';
     this.seek(placements(edit).find(c=>c.id===clipId).at);
   }
-  clearTakeAudition(){this.pause();this.audition=null;delete this.program.dataset.audition;this.program.querySelector('#program-note').textContent='Current draft. Source-rate playback and browser text are approximate.';this.showPicture(true);}
+  setCoverageAudition(clipId,candidate){
+    const edit=this.getEdit();if(candidate.command?.type!=='coverage-add'||!edit.clips.some(c=>c.id===clipId))throw Error('coverage_audition_invalid');
+    const profiles=new Map(this.getState().assets.filter(a=>a.media).map(a=>[a.id,a.media]));
+    applyEdit(edit,candidate.command,profiles);
+    this.pause();this.selected=clipId;this.audition={clipId,coverage:structuredClone(candidate.command.coverage)};this.program.dataset.audition='true';
+    this.program.querySelector('#program-note').textContent='CUTAWAY AUDITION · '+candidate.label+'. Main footage and sound stay fixed.';
+    this.seek(Math.max(0,this.audition.coverage.at-Math.round(this.fps()/2)));
+  }
+  loopSelection(){const c=this.audition?.coverage;return c?{at:Math.max(0,c.at-Math.round(this.fps()/2)),end:Math.min(totalFrames(this.getEdit()),c.at+c.frames+Math.round(this.fps()/2))}:placements(this.getEdit()).find(c=>c.id===this.selected);}
+  clearTakeAudition(){this.pause();this.audition=null;delete this.program.dataset.audition;this.program.querySelector('#program-note').textContent='Current draft. Source-rate playback and browser text are approximate.';this.showPicture(true);if(this.getEdit())this.draw();}
   showPicture(force=false){
     const edit=this.getEdit();if(!edit)return;
     paintDraftText(this.program.querySelector('.program-view'),edit,this.frame);
-    let c=this.frame<totalFrames(edit)?clipAt(edit,this.frame):null;
+    const viewing=this.audition?.coverage?{...edit,coverage:[...(edit.coverage||[]),this.audition.coverage]}:edit;
+    let c=this.frame<totalFrames(edit)?clipAt(viewing,this.frame):null;
     if(c&&this.audition?.clipId===c.id)c={...c,...this.audition.selection};
     if(!c){this.video.hidden=true;this.video.pause();this.image.hidden=true;this.empty.hidden=false;this.empty.textContent=edit.soundtrack?'No picture here. Your song continues.':'Place a shot to start the picture.';return;}
     const a=this.getState().assets.find(a=>a.id===c.assetId);if(!a)return;
@@ -190,7 +201,8 @@ export class MusicRoom {
     const time=asNumber(exact(c.sourceStart,true))+Math.min(c.frames-1,Math.max(0,this.frame-c.at))/this.fps();
     const changed=this.video.dataset.clip!==c.id||this.video.dataset.asset!==id;
     const position=()=>{try{this.video.currentTime=time;}catch{}if(this.playing)this.video.play().catch(()=>{});};
-    if(this.video.dataset.asset!==id){this.video.dataset.asset=id;this.video.src='/media/'+id;this.video.onloadedmetadata=()=>{if(this.video.dataset.asset===id)position();};}
+    // A source may finish loading after the playhead has moved further into it.
+    if(this.video.dataset.asset!==id){this.video.dataset.asset=id;this.video.src='/media/'+id;this.video.onloadedmetadata=()=>{if(this.video.dataset.asset===id)this.showPicture(true);};}
     this.video.dataset.clip=c.id;
     if(changed||force||!this.playing||Math.abs(this.video.currentTime-time)>0.2)position();
     else if(this.playing&&this.video.paused)this.video.play().catch(()=>{});

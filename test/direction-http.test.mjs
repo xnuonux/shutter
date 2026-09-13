@@ -9,6 +9,7 @@ import os from 'node:os';
 import {runMedia} from '../src/media-io.mjs';
 import {pcm24} from './helpers/sound-fixtures.mjs';
 import {fingerprint} from '../src/store.mjs';
+import {pictureClips} from '../public/music-edit.mjs';
 
 let child,base,root,original,alternate,song;
 const request=(url,input,method='POST',extra={})=>fetch(base+url,{method,headers:{'content-type':'application/json',...extra},body:JSON.stringify(input)});
@@ -107,4 +108,47 @@ test('direction storage cannot replace an existing source note with a colliding 
   const note=await json(request(`/api/media/productions/${f.id}/memory`,{baseRevision:0,moment:{id,assetId:alternate.id,startUs:0,endUs:3000000,label:'Preserve this note'}}),201);
   assert.equal((await request(f.url,{baseRevision:0,brief:f.brief},'PUT')).status,409);
   const notes=await json(fetch(base+`/api/media/productions/${f.id}/memory?q=preserve`));assert.deepEqual(notes.results,[note]);
+});
+
+async function coverageFixture(coverage={at:36,end:60,sourceOffsetUs:500000}){
+  const f=await fixture();f.record=await json(request(`/api/media/productions/${f.id}/timeline`,{baseRevision:f.record.revision,timeline:{...f.record.timeline,coverage:[]}},'PUT'));
+  f.brief.coverage=coverage;await saveBrief(f);return f;
+}
+test('cutaway proposals cover a shared interval across a shot boundary with explicit source alignment',async()=>{
+  const f=await coverageFixture(),p=await propose(f),c=p.candidates[0];
+  assert.equal(p.operation,'add-camera-coverage');assert.equal(p.interval.at,36);assert.equal(p.interval.end,60);
+  assert.deepEqual(p.interval.mainViews.map(c=>c.clipId),['first','second']);
+  assert.equal(p.interval.returnTo.clipId,'second');assert.equal(p.interval.returnTo.sourceStart,'5/2');
+  assert.equal(c.command.type,'coverage-add');assert.equal(c.command.coverage.at,36);assert.equal(c.command.coverage.frames,24);assert.equal(c.command.coverage.sourceStart,'1500000/1000000');
+  assert.equal((await json(fetch(base+f.url))).direction.brief.coverage.sourceOffsetUs,500000);
+  assert.deepEqual((await json(fetch(base+`/api/media/productions/${f.id}/timeline`))).timeline,f.record.timeline);
+});
+test('cutaway acceptance requires alignment and preserves every main frame, soundtrack and undo',async()=>{
+  const f=await coverageFixture(),p=await propose(f);
+  assert.equal((await accept(f,p)).status,400);
+  const saved=await json(accept(f,p,{aligned:true}));
+  assert.deepEqual(saved.timeline.clips,f.record.timeline.clips);assert.deepEqual(saved.timeline.soundtrack,f.record.timeline.soundtrack);assert.deepEqual(saved.timeline.markers,f.record.timeline.markers);
+  const runs=pictureClips(saved.timeline);
+  assert.deepEqual(runs.map(c=>[c.at,c.frames,c.assetId,c.sourceStart]),[[0,36,original.id,'0/1'],[36,24,alternate.id,'3/2'],[60,36,original.id,'5/2']]);
+  const restored=await json(request(`/api/media/productions/${f.id}/timeline/undo`,{baseRevision:saved.revision}));assert.deepEqual(restored.timeline,f.record.timeline);
+});
+test('cutaway fit uses its own duration and rejects offsets beyond the marked range',async()=>{
+  const f=await coverageFixture({at:36,end:48,sourceOffsetUs:1500000}),p=await propose(f);assert.equal(p.candidates[0].fits,true);
+  await json(request(f.url,{baseRevision:1,brief:{...f.brief,coverage:{at:36,end:60,sourceOffsetUs:1500000}}},'PUT'));
+  const tooShort=await json(request(f.url+'/proposals',{baseRevision:f.record.revision,directionRevision:2}),201);assert.equal(tooShort.candidates[0].fits,false);
+  assert.equal((await accept(f,tooShort,{aligned:true})).status,400);
+});
+test('cutaway planning refuses occupied, out-of-scene and unrelated shot intervals',async()=>{
+  const occupied=await fixture();occupied.brief.coverage={at:36,end:60,sourceOffsetUs:0};await saveBrief(occupied);
+  assert.equal((await request(occupied.url+'/proposals',{baseRevision:occupied.record.revision,directionRevision:1})).status,400);
+  for(const coverage of [{at:36,end:120,sourceOffsetUs:0},{at:60,end:72,sourceOffsetUs:0}]){
+    const f=await coverageFixture(coverage);assert.equal((await request(f.url+'/proposals',{baseRevision:f.record.revision,directionRevision:1})).status,400);
+  }
+  const f=await fixture();for(const coverage of [{at:1.5,end:12,sourceOffsetUs:0},{at:12,end:12,sourceOffsetUs:0},{at:0,end:12,sourceOffsetUs:-1}])assert.equal((await request(f.url,{baseRevision:0,brief:{...f.brief,coverage}},'PUT')).status,400);
+});
+test('new coverage or changed direction invalidates an earlier cutaway proposal',async()=>{
+  const f=await coverageFixture(),p=await propose(f);
+  const timeline={...f.record.timeline,coverage:[{id:'other',assetId:original.id,sourceStart:'0',at:40,frames:12,fit:'contain'}]};
+  const next=await json(request(`/api/media/productions/${f.id}/timeline`,{baseRevision:f.record.revision,timeline},'PUT'));
+  assert.equal((await accept(f,p,{aligned:true})).status,409);assert.deepEqual((await json(fetch(base+`/api/media/productions/${f.id}/timeline`))).timeline,next.timeline);
 });

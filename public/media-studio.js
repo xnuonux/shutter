@@ -30,9 +30,9 @@ const memoryRoom=new MemoryRoom({root:$('#memory-room'),getEdit:()=>draft,getRec
 });
 const deliveryRoom=new DeliveryRoom({getState:()=>state,getRecord:()=>record,isDirty:()=>dirty,api:(...args)=>api(...args),action:fn=>action(fn),notify:s=>notify(s)});
 const colorRoom=new ColorRoom({getState:()=>state,api:(...args)=>api(...args),action:fn=>action(fn),notify:s=>notify(s),onReady:id=>selectAsset(id),onSelect:id=>selectAsset(id),refresh:()=>refresh()});
-const directionRoom=new DirectionRoom({root:$('#direction-room'),getEdit:()=>draft,getRecord:()=>record,getState:()=>state,getProject:()=>projectId,isDirty:()=>dirty,isBusy:()=>busy||recoveryPending,recoveryBlocked:()=>recoveryPending,
+const directionRoom=new DirectionRoom({root:$('#direction-room'),getEdit:()=>draft,getRecord:()=>record,getState:()=>state,getProject:()=>projectId,getFrame:()=>room.frame,isDirty:()=>dirty,isBusy:()=>busy||recoveryPending,recoveryBlocked:()=>recoveryPending,
  api:(...args)=>api(...args),action:fn=>action(fn),notify:s=>notify(s),saveCut:async()=>{textRoom.assertApplied();if(dirty)await save();},
- audition:(clipId,candidate)=>room.setTakeAudition(clipId,candidate),clearAudition:()=>room.clearTakeAudition(),
+ audition:(clipId,candidate)=>room.setTakeAudition(clipId,candidate),auditionCoverage:(clipId,candidate)=>room.setCoverageAudition(clipId,candidate),clearAudition:()=>room.clearTakeAudition(),
  applySaved:next=>{record=next;draft=structuredClone(next.timeline);dirty=false;localHistory=new EditHistory(draft);preserveDraft();drawEdit();}});
 const workspace=new StudioWorkspace({room,memory:memoryRoom,direction:directionRoom,getEdit:()=>draft});
 const notify=s=>{$('#status').textContent=s;};
