@@ -28,11 +28,15 @@ The latest proposal is linked explicitly from its direction record. Reusing a pr
 
 No provider was contacted and this milestone spent **$0**. All testing used disposable project data; canonical journal preservation is checked before and after local integration. No remote branch, draft PR or deployment is changed by this milestone.
 
+Code is committed at `08c8480` and fast-forwarded locally into the canonical checkout. Three canonical browser checks passed, including the original rain scene editor. Before/after snapshots of all records and request entries match exactly: **78 records, 19 requests**, digest `7d9b4326b5dd79bf02451228aecda069af83cf9227b5a326728d34da43013663`. This digest hashes `{rows,requests}` from ordered raw SQL rows; its serialization differs from the earlier workspace receipt. No data migration was required.
+
 ## Handoff
 
 Implementation: `src/shot-direction.mjs`, `public/direction-room.js` and its stylesheet; wired through the existing media API and Studio. Tests: `test/direction-http.test.mjs` and `test/browser/direction-studio.py`. Runtime instructions remain in the takeover integration result. Browser Python is `work/test-python/Scripts/python.exe`; `work/env.ps1` configures Chromium and media tools.
 
 Review server: localhost4688, retained integration worktree. The latest disposable review production is recorded in `work/direction-review/receipt.json`. Canonical app remains localhost4677 with original data. Recheck process ownership before restarting.
+
+A clean demonstration is at `http://127.0.0.1:4688/media-studio?project=prod_2a540d7d-5c31-49ac-9558-d9e7c78d0a7b`. Open Director and select The orb in the storm. The demonstration preserves unaccepted continuity checks; test automation's checked boxes are not represented as a creative judgment. At integration, canonical server PID is 3872 and review server PID is 33992. Treat these as observations, not permanent process identities.
 
 Task evidence lives in `outputs/shutter/scene-direction-2026-09-12/` under task `01a087ae-15fc-7e43-8eb2-126e7883d103`, including screenshot captures, browser receipts, suite output and canonical preservation receipts.
 

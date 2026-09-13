@@ -4,6 +4,8 @@ September 12, 2026. Studio now connects shot direction and continuity notes to s
 
 ## Current source and working proof
 
+Scene direction is committed at `08c8480` and integrated locally. The canonical app passed three read-only browser checks; its 78 original records and 19 request entries are unchanged. Review Director using `http://127.0.0.1:4688/media-studio?project=prod_2a540d7d-5c31-49ac-9558-d9e7c78d0a7b`, then select the Director tab. The review uses disposable data and existing footage; continuity checkboxes are intentionally unaccepted. Canonical app remains localhost4677.
+
 The focused workspace implementation is committed at `b38e5f7` and integrated locally with its handoff. The canonical browser check passed and the original journal still matches its earlier 78-record / 19-request digest. See the workspace result for current process observations.
 
 The cumulative source is `astra/generative-insert-planner-20260912` at `be745b1`. The local integration branch is `codex/shutter-integration-20260912` in `C:/dev/.worktrees/shutter-integration-20260912`; code commit `868bf91` connects same-scene-time coverage to the new asset-backed Studio. The later approved VISION was merged at `b85bd3e`. The verified result is integrated into the canonical `C:/dev/shutter` checkout locally. Remote draft PRs remain unmerged.
