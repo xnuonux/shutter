@@ -37,6 +37,31 @@ The apply receipt's `revision` describes that operation. `currentRevision` can b
 
 Undo and redo use the same preview/apply flow and each must be the only command in its batch. They restore full saved decisions, including sound and text. They never restart a generation or alter original source files.
 
+## Inspect a cutaway before applying
+
+After preview, call `shutter_inspect_cutaway` with the same `projectId`, `version`, `baseRevision`, `commands` and `previewHash`, plus the `coverageId` in the proposed result. It extracts up to six JPEG source pictures and returns them directly to a vision-capable MCP client, with labeled scene/source positions and a structured manifest. Use `includeImages: false` only when metadata is sufficient. This is local frame decoding and a reusable evidence cache; it does not save the edit, create a paid render, or record continuity approval.
+
+The Director panel offers the same path under **Compare cut boundaries** for a selected timed cutaway proposal. It shows four comparisons: entry across the cut, entry at equal scene time, return at equal scene time, and return across the cut. A picture can appear in more than one comparison without being extracted twice.
+
+For coverage occupying frames 36 through 59, the evidence roles are:
+
+| Role | Scene frame | Purpose |
+| --- | --- | --- |
+| `entry-before` | 35 | Actual visible picture immediately before coverage |
+| `entry-main` | 36 | Main action at coverage entry |
+| `entry-alternate` | 36 | Alternate action at the same scene time |
+| `return-alternate` | 59 | Last alternate picture |
+| `return-main` | 59 | Main action at the same time as that last alternate picture |
+| `return-after` | 60 | Actual visible picture after coverage |
+
+At the start/end of the scene, nonexistent before/after pictures are omitted. Neighboring coverage is represented as visible picture where applicable. Sampling retains the exact source clock and framing used by the exporter, including stills and mixed source frame rates. Main time never restarts.
+
+The `shutter-cutaway-evidence-v1` manifest binds `id`, production, revision, preview hash, coverage interval, exact source seconds, scene frames, local image URLs and image byte hashes. It includes up to 16 relevant saved shot directions, explicitly marked `artist-authored`, with missing/truncated intent reported. `shutter_studio_context` also exposes saved intent. Use these notes as the artist's stated aim, not evidence that the picture satisfies it.
+
+Shutter rechecks the preview, intent and source integrity before returning new evidence. Changed state rejects obsolete extraction. A repeated unchanged request reuses verified cached pictures; changed intent produces a different evidence identity. Extraction has a 90-second total deadline, at most six images, a maximum 640-pixel long side and a 256 KiB limit per JPEG. It uses existing FFmpeg and original local assets.
+
+A boundary picture cannot establish motion continuity over an entire interval. Audition the scene to assess motion and sound. Evidence excludes titles and audio, and its unmanaged thumbnails are not calibrated color or generation references. The application does not score identity or auto-check the artist's acceptance boxes. A connected director must explain what it actually sees, distinguish uncertainty from evidence, and use the existing preview/apply workflow for an authorized edit.
+
 ## Timing and consequences
 
 - Scene positions are integer output frames. Intervals include their first frame and exclude their end. Source positions are exact nonnegative seconds supplied as strings, such as `"3/2"`; they are not source-frame indices.

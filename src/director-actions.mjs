@@ -18,6 +18,15 @@ const optionalRead=(studio,id,kind)=>{
 const history=type=>type==='undo'||type==='redo';
 const receiptId=(projectId,requestKey)=>'edit_action_'+fingerprint({projectId,requestKey});
 
+/** Authored direction only. This is context for judgment, never an inferred visual fact. */
+export function sceneIntent(studio,projectId,clipIds){
+  const unique=[...new Set(clipIds)],selected=unique.slice(0,16);
+  const records=new Map(studio.list('shot-direction').filter(d=>d.projectId===projectId).map(d=>[d.clipId,d]));
+  return {directions:selected.filter(id=>records.has(id)).map(clipId=>{
+    const d=records.get(clipId);return {clipId,revision:d.revision,brief:structuredClone(d.brief),evidence:'artist-authored'};
+  }),missingClipIds:selected.filter(id=>!records.has(id)),truncated:unique.length>selected.length};
+}
+
 export function actionCatalog(types=[]){
   validateSchema({type:'array',maxItems:ACTIONS.length,items:{type:'string'}},types);
   const requested=types.length?types.map(type=>ACTIONS.find(a=>a.type===type)||(()=>{throw Error('action_unsupported');})()):ACTIONS;
@@ -54,7 +63,7 @@ export function directorContext(studio,{projectId,assetOffset=0,assetLimit=30}={
     const media=profiles.get(a.id);
     return {id:a.id,name:a.name,kind:a.kind,sha256:a.sha256,media:media?{kind:media.kind,duration:media.duration,width:media.width,height:media.height,fps:media.fps,audio:media.audio}:null};
   }),nextAssetOffset:assetOffset+assetLimit<assets.length?assetOffset+assetLimit:null,
-  ...(selected?{project:{id:projectId,title:studio.getProduction(projectId).title,revision:selected.revision,...resultView(selected)}}:{})};
+  ...(selected?{project:{id:projectId,title:studio.getProduction(projectId).title,revision:selected.revision,...resultView(selected),intent:sceneIntent(studio,projectId,selected.timeline.clips.map(c=>c.id))}}:{})};
 }
 export function previewActions(studio,projectId,input){
   validateSchema(previewSchema,input);input.commands.forEach(validateCommand);

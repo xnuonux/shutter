@@ -1,4 +1,5 @@
 import {handleMemoryRequest} from './memory-api.mjs';
+import {inspectCutaway,readCutawayFrame} from './director-evidence.mjs';
 import {actionCatalog,directorContext,previewActions,applyActions,actionReceipt,commandProfiles} from './director-actions.mjs';
 import {applyTimelineCommand} from '../public/edit-actions.mjs';
 import {checkMediaHealth,restoreMissingAsset} from './media-recovery.mjs';
@@ -30,6 +31,9 @@ export async function handleMediaRequest(studio,req,res,url) {
   if(req.method==='GET'&&staticFiles[url.pathname]) {
     const [name,type]=staticFiles[url.pathname];res.writeHead(200,{'content-type':type,'cache-control':'no-cache'});res.end(await fsp.readFile(path.join(publicRoot,name)));return true;
   }
+  if(req.method==='GET'&&url.pathname==='/action-contract.mjs'){
+    res.writeHead(200,{'content-type':'text/javascript','cache-control':'no-cache'});res.end(await fsp.readFile(path.join(publicRoot,'action-contract.mjs')));return true;
+  }
   if(!url.pathname.startsWith('/api/media/'))return false;
   if(await handleMemoryRequest(studio,req,res,url))return true;
   const parts=url.pathname.split('/').filter(Boolean);
@@ -41,6 +45,15 @@ export async function handleMediaRequest(studio,req,res,url) {
       json(res,200,directorContext(studio,{projectId:url.searchParams.get('projectId')||undefined,assetOffset:Number(url.searchParams.get('assetOffset')??0),assetLimit:Number(url.searchParams.get('assetLimit')??30)}));return true;
     }
     if(parts[2]==='productions'&&parts[4]==='actions'){
+      if(req.method==='GET'&&parts.length===9&&parts[5]==='evidence'&&parts[7]==='frames'){
+        if(!/^[0-5]$/.test(parts[8]))throw Error('not_found');
+        const bytes=await readCutawayFrame(studio,parts[3],parts[6],Number(parts[8]));res.writeHead(200,{'content-type':'image/jpeg','cache-control':'no-store'});res.end(bytes);return true;
+      }
+      if(req.method==='POST'&&parts.length===6&&parts[5]==='evidence'){
+        const input=await body(req),abort=new AbortController(),cancel=()=>{if(!res.writableEnded)abort.abort();};res.once('close',cancel);if(res.destroyed)abort.abort();
+        try{const result=await mediaExclusive(studio,()=>inspectCutaway(studio,parts[3],input,{signal:abort.signal}));if(!res.destroyed)json(res,200,result);}
+        finally{res.removeListener('close',cancel);}return true;
+      }
       if(req.method==='GET'&&parts.length===7&&parts[5]==='receipts'){json(res,200,actionReceipt(studio,parts[3],decodeURIComponent(parts[6])));return true;}
       if(req.method==='POST'&&parts.length===6&&['preview','apply'].includes(parts[5])){
         const fn=parts[5]==='preview'?previewActions:applyActions;json(res,200,fn(studio,parts[3],await body(req)));return true;
