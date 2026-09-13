@@ -15,7 +15,7 @@ before(async()=>{
 });
 after(async()=>{if(child&&child.exitCode===null){child.kill('SIGTERM');await once(child,'exit');}});
 const post=(url,input)=>fetch(base+url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input)});
-test('actual parent server serves new studio after its local-origin gates',async()=>{const r=await fetch(base+'/media-studio');assert.equal(r.status,200);assert.match(await r.text(),/Your footage/);assert.match(r.headers.get('content-security-policy'),/frame-ancestors 'none'/);});
+test('actual parent server serves new studio after its local-origin gates',async()=>{const r=await fetch(base+'/media-studio');assert.equal(r.status,200);assert.match(await r.text(),/id="studio-shell"/);assert.match(r.headers.get('content-security-policy'),/frame-ancestors 'none'/);for(const [file,type] of [['studio-workspace.js','text/javascript'],['studio-workspace.css','text/css']]){const asset=await fetch(base+'/'+file);assert.equal(asset.status,200);assert.match(asset.headers.get('content-type'),new RegExp(type));}});
 test('foreign Origin and cross-site fetch cannot create productions',async()=>{
  for(const headers of [{'origin':'https://attacker.invalid'},{'sec-fetch-site':'cross-site'},{host:'attacker.invalid'}]) {
   const status=await new Promise((resolve,reject)=>{const req=http.request(base+'/api/media/productions',{method:'POST',headers:{...headers,'content-type':'application/json'}},res=>{res.resume();res.on('end',()=>resolve(res.statusCode));});req.on('error',reject);req.end('{"title":"bad"}');});

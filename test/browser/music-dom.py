@@ -8,7 +8,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'verification';OUT.mkdir(exist_ok=True)
-source={name:(ROOT/'public'/name).read_text() for name in ['media-health-room.js','media-health-room.css','memory-contract.mjs','memory-room.js','memory-room.css','music-edit.mjs','edit-recovery.mjs','music-room.js','media-studio.js','media-studio.html','media-studio.css','music-room.css','sound-edit.mjs','sound-room.js','sound-room.css','delivery-contract.mjs','delivery-room.js','delivery-room.css','color-contract.mjs','color-room.js','color-room.css','text-edit.mjs','text-room.js','text-room.css']}
+source={name:(ROOT/'public'/name).read_text() for name in ['studio-workspace.js','studio-workspace.css','media-health-room.js','media-health-room.css','memory-contract.mjs','memory-room.js','memory-room.css','music-edit.mjs','edit-recovery.mjs','music-room.js','media-studio.js','media-studio.html','media-studio.css','music-room.css','sound-edit.mjs','sound-room.js','sound-room.css','delivery-contract.mjs','delivery-room.js','delivery-room.css','color-contract.mjs','color-room.js','color-room.css','text-edit.mjs','text-room.js','text-room.css']}
 html=re.sub(r'<script\b[^>]*>.*?</script>|<link\b[^>]*>', '', source['media-studio.html'],flags=re.S)
 assets=[dict(id='asset_'+str(i)*64,name=name,kind=kind,mime=mime,bytes=300000,media=dict(kind=kind,width=640,height=360,duration=10,audio=[dict(index=0,sampleRate=48000,bits=24,channels=2)] if kind=='audio' else [],fps=dict(n=24,d=1))) for i,name,kind,mime in [(1,'Night performance.mp4','video','video/mp4'),(2,'Moonlight closeup.mp4','video','video/mp4'),(3,'Finished master.wav','audio','audio/wav'),(4,'Cover portrait.png','image','image/png')]]
 timeline=dict(format='shutter-media-edit-v1',fps='24',width=1920,height=1080,clips=[dict(id='shot_'+str(i),assetId=assets[i-1]['id'],sourceStart='0',frames=48,fit='contain') for i in [1,2]]+[dict(id='photo',assetId=assets[3]['id'],sourceStart='0',frames=48,fit='cover')],soundtrack=dict(assetId=assets[2]['id'],tailPolicy='pad-silence'),colorPolicy='unmanaged-sdr',audioPolicy='soundtrack-or-silence',cadencePolicy='wallclock-nearest',music=dict(schema='shutter-music-map-v1',bpm='96',beatsPerBar=4,beatUnit=4,offsetFrames=0),markers=[dict(id='chorus',frame=72,label='First chorus',kind='chorus')])
@@ -28,7 +28,7 @@ with sync_playwright() as p:
  context=browser.new_context(viewport=dict(width=1440,height=1100),device_scale_factor=1)
  context.route('**/*',lambda route:route.abort())
  page=context.new_page();page.on('pageerror',lambda error:report['errors'].append(str(error)))
- page.set_content(html);page.add_style_tag(content=source['media-studio.css']+'\n'+source['music-room.css']+'\n'+source['sound-room.css']+'\n'+source['delivery-room.css']+'\n'+source['color-room.css']+'\n'+source['text-room.css']+'\n'+source['memory-room.css'])
+ page.set_content(html);page.add_style_tag(content=source['media-studio.css']+'\n'+source['music-room.css']+'\n'+source['sound-room.css']+'\n'+source['delivery-room.css']+'\n'+source['color-room.css']+'\n'+source['text-room.css']+'\n'+source['memory-room.css']+'\n'+source['studio-workspace.css'])
  page.evaluate('''({state,record,wave})=>{
  window.fixtureState=state;window.fixtureRecord=record;window.fixtureWave=wave;window.fixtureStorage=new Map();
  Object.defineProperty(window,'localStorage',{value:{getItem:k=>fixtureStorage.get(k)||null,setItem:(k,v)=>fixtureStorage.set(k,String(v)),removeItem:k=>fixtureStorage.delete(k)}});
@@ -46,7 +46,7 @@ with sync_playwright() as p:
  return {ok:true,status:200,json:async()=>structuredClone(data)};
  };
  }''',dict(state=state,record=record,wave=wave))
- namespaces={'media-health-room.js':'TestMediaHealthRoom','text-edit.mjs':'TestText','text-room.js':'TestTextRoom','color-contract.mjs':'TestColorContract','color-room.js':'TestColorRoom','music-edit.mjs':'TestEdit','memory-contract.mjs':'TestMemory','memory-room.js':'TestMemoryRoom','edit-recovery.mjs':'TestRecovery','sound-edit.mjs':'TestSound','music-room.js':'TestRoom','sound-room.js':'TestSoundRoom','delivery-contract.mjs':'TestDeliveryContract','delivery-room.js':'TestDeliveryRoom'}
+ namespaces={'studio-workspace.js':'TestWorkspace','media-health-room.js':'TestMediaHealthRoom','text-edit.mjs':'TestText','text-room.js':'TestTextRoom','color-contract.mjs':'TestColorContract','color-room.js':'TestColorRoom','music-edit.mjs':'TestEdit','memory-contract.mjs':'TestMemory','memory-room.js':'TestMemoryRoom','edit-recovery.mjs':'TestRecovery','sound-edit.mjs':'TestSound','music-room.js':'TestRoom','sound-room.js':'TestSoundRoom','delivery-contract.mjs':'TestDeliveryContract','delivery-room.js':'TestDeliveryRoom'}
  def local_imports(text):
   for file,namespace in namespaces.items():
    text=re.sub(r"import \{([^}]+)\} from './"+re.escape(file)+r"';",r'const {\1}=window.'+namespace+';',text)
@@ -82,7 +82,7 @@ with sync_playwright() as p:
  check('mobile page avoids horizontal viewport overflow',"document.documentElement.scrollWidth <= innerWidth+1")
  # These are UI control fixtures only, not audio playback certification.
  page.set_viewport_size(dict(width=1440,height=1100))
- page.click('#sound-enable')
+ page.click('#workspace-mode-sound');page.click('#sound-enable')
  check('Sound Stage opt-in preserves master at fixed origin',"fixtureApi.getDraft().soundStage.schema==='shutter-sound-stage-v1' && fixtureApi.getDraft().soundtrack.assetId==='asset_'+'3'.repeat(64)")
  page.select_option('#sound-role','ambience');page.click('#sound-add-track')
  check('add lane creates editable independent sound structure',"fixtureApi.getDraft().soundStage.tracks[0].role==='ambience'")
@@ -115,13 +115,13 @@ with sync_playwright() as p:
  page.set_viewport_size(dict(width=1440,height=1100))
  page.locator('#sound-room').screenshot(path=str(OUT/'sound-stage-dom-desktop.png'))
  # Actual parent workspace must protect unfinished text, not only already-applied edit history.
- page.evaluate("document.querySelector('.text-room').open=true;window.preTextRevision=fixtureApi.getRecord().revision;window.preTextDraft=JSON.stringify(fixtureApi.getDraft())")
+ page.click('#workspace-mode-finish');page.evaluate("document.querySelector('.text-room').open=true;window.preTextRevision=fixtureApi.getRecord().revision;window.preTextDraft=JSON.stringify(fixtureApi.getDraft())")
  page.fill('#text-words','Unfinished words');page.click('#save')
  check('actual Save rejects an unfinished text form without advancing revision',"fixtureApi.getRecord().revision===preTextRevision&&JSON.stringify(fixtureApi.getDraft())===preTextDraft&&document.querySelector('#status').textContent.includes('Apply or discard')")
  check('unapplied text causes the ordinary beforeunload warning',"(()=>{const e=new Event('beforeunload',{cancelable:true});window.dispatchEvent(e);return e.defaultPrevented})()")
- page.evaluate("window.confirm=()=>false");page.fill('#new-project input[name=title]','Do not discard these words');page.locator('#new-project').evaluate('(form)=>form.requestSubmit()');page.wait_for_function('!document.body.inert')
+ page.evaluate("window.confirm=()=>false");page.click('#new-production-button');page.fill('#new-project input[name=title]','Do not discard these words');page.locator('#new-project').evaluate('(form)=>form.requestSubmit()');page.wait_for_function('!document.body.inert')
  check('declining new-production discard preserves the unfinished form',"fixtureApi.textRoom.pending&&fixtureApi.getRecord().projectId==='demo'&&document.querySelector('#text-words').value==='Unfinished words'")
- page.evaluate('window.confirm=()=>true');page.click('#text-apply')
+ page.keyboard.press('Escape');page.evaluate('window.confirm=()=>true');page.click('#text-apply')
  check('Finish apply participates in the actual parent edit state',"fixtureApi.getDraft().textLayer.cues[0].text==='Unfinished words'&&!fixtureApi.textRoom.pending")
  page.click('#undo');check('parent undo restores the pre-text picture and sound draft',"JSON.stringify(fixtureApi.getDraft())===preTextDraft")
  # Actual MusicRoom auditions alter monitor picture, not the editable source or sound state.

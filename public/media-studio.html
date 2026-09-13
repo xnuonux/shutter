@@ -1,25 +1,70 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#141417"><title>Shutter · Camera & music</title><link rel="stylesheet" href="/media-studio.css"><link rel="stylesheet" href="/memory-room.css"><link rel="stylesheet" href="/api/media/generate-room.css"><link rel="stylesheet" href="/music-room.css"><link rel="stylesheet" href="/sound-room.css"><link rel="stylesheet" href="/delivery-room.css"><link rel="stylesheet" href="/color-room.css"><link rel="stylesheet" href="/text-room.css"><link rel="stylesheet" href="/media-health-room.css"><script type="module" src="/media-studio.js"></script><script type="module" src="/api/media/generate-room.js"></script></head>
-<body>
-<header><a class="brand" href="/">SHUTTER<span>YOUR PRODUCTION, CONNECTED</span></a><nav><a href="/">Direct / Canvas</a><span aria-current="page">Music Cut</span></nav><span class="tag">LOCAL CORE · GOVERNED GENERATION</span></header>
-<main>
-<section class="intro"><div><p class="eyebrow">FROM REAL LIGHT TO THE FINAL NOTE</p><h1>Your footage.<br>Your song. <em>One cut.</em></h1><p>Bring camera footage, photographs and your finished master. Build locally. When the cut needs something reality did not capture, prepare references, see the live quote, and decide whether generation earns its place.</p></div><form id="new-project"><label>New camera / music production<input name="title" placeholder="A song, a scene, a new direction…" maxlength="200" required></label><button type="submit">Create production ↗</button><label>Continue a saved assembly<select id="projects"><option value="">Choose a production</option></select></label></form></section>
-<div id="health" class="notice">Checking local media tools…</div>
-<section class="workspace">
-<aside class="library panel"><div class="section-title"><h2>Material</h2><span id="asset-count">0 assets</span></div><label id="drop-zone" class="drop-zone">Drop footage, photos or audio<span>Or choose files from your computer</span><input id="files" type="file" multiple></label><p class="small">Originals stay unchanged. RAW/ARW and HEIF development is not implemented yet.</p><label>Find material<input id="asset-search" type="search" placeholder="Filename…"></label><section id="media-health-room" aria-label="Media health and recovery"></section><div id="assets" class="asset-list"></div></aside>
-<div class="workarea">
-<div class="dual-viewers"><section class="panel viewer-panel"><div class="section-title"><h2 id="source-title">Choose your material</h2><span id="source-kind" class="tag">SOURCE VIEW</span></div><div id="source-view" class="viewer empty">A camera shot, a photograph, a finished song.<br>It all starts here.</div><div id="source-details" class="small"></div><div id="source-actions"></div></section><section id="program-host" class="panel program-panel"></section></div>
-<section id="memory-room" class="panel" aria-label="Production Memory and Take Stacks"></section>
-<section id="generate-room" class="panel" aria-label="Governed generative inserts"></section>
-<section id="edit-panel" class="panel"><div class="section-title"><div><p class="eyebrow">THE ASSEMBLY</p><h2 id="project-title">Start a production above</h2></div><span id="revision" class="tag">NO SAVED CUT</span></div>
-<div id="recovery-notice" class="notice" hidden></div><div id="editing" hidden><div class="settings"><label>Frame rate<select id="fps"><option>24000/1001</option><option>24</option><option>25</option><option>30000/1001</option><option>30</option><option>50</option><option>60000/1001</option><option>60</option></select></label><label>Width<input id="width" type="number" min="16" max="4096" step="2"></label><label>Height<input id="height" type="number" min="16" max="4096" step="2"></label></div>
-<label>Mastered song / soundtrack<select id="soundtrack"></select></label><p class="small">The master stays at zero. Picture edits and cues do not move it. Camera audio stays excluded unless you deliberately place a stream in Sound Stage. Exports trim or pad the song to picture; the original WAV remains unchanged.</p>
-<section id="music-room"></section><section id="sound-room" aria-label="Sound Stage"></section><section id="text-room" aria-label="Titles and captions"></section><details class="numeric-edit"><summary>Detailed shot list</summary><div id="clips" class="clip-list"></div></details><p id="duration" class="small"></p>
-<div class="action-row"><button id="save">Save cut</button><button id="undo" class="secondary">Undo</button><button id="redo" class="secondary">Redo</button></div>
-<div class="render-controls"><label class="check"><input id="color-consent" type="checkbox">I have reviewed source color. This rough-cut renderer does not grade S-Log, HDR or ICC images. Known HDR is blocked.</label><button id="render">Render & prepare handoff ↗</button></div></div></section>
-<section id="delivery" class="panel" hidden></section>
-</div></section>
-<footer>Keep the original. Make the edit. Explore the next version.<span>Camera footage → production memory → governed generation → one production.</span></footer>
-</main><div id="status" role="status" aria-live="polite">Ready.</div>
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#171d25">
+<title>Shutter · Studio</title>
+<link rel="stylesheet" href="/media-studio.css"><link rel="stylesheet" href="/memory-room.css"><link rel="stylesheet" href="/api/media/generate-room.css"><link rel="stylesheet" href="/music-room.css"><link rel="stylesheet" href="/sound-room.css"><link rel="stylesheet" href="/delivery-room.css"><link rel="stylesheet" href="/color-room.css"><link rel="stylesheet" href="/text-room.css"><link rel="stylesheet" href="/media-health-room.css"><link rel="stylesheet" href="/studio-workspace.css">
+<script type="module" src="/media-studio.js"></script><script type="module" src="/api/media/generate-room.js"></script>
+</head>
+<body class="studio-app" data-mode="edit" data-tool="source">
+<header class="studio-topbar">
+  <a class="studio-brand" href="/" aria-label="Shutter home"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13"/><path d="m16 3 7 12-7 12M28 11H14L7 23M4 11l7 12h14M16 3 9 15h14"/></svg><span>shutter.</span></a>
+  <div class="production-picker"><label for="projects" class="sr-only">Current production</label><select id="projects"><option value="">Choose a production</option></select><button id="new-production-button" class="secondary" aria-label="New production" title="New production">+</button></div>
+  <div class="studio-save"><span id="revision" class="tag">No production</span><button id="undo" class="secondary" title="Undo" disabled>Undo</button><button id="redo" class="secondary" title="Redo" disabled>Redo</button><button id="save" disabled>Save cut</button></div>
+  <a class="studio-original" href="/">Direct & canvas</a>
+</header>
+<dialog id="production-dialog" aria-labelledby="production-dialog-title">
+  <div class="dialog-heading"><h2 id="production-dialog-title">A new production</h2><button id="close-production-dialog" class="secondary" aria-label="Close new production">×</button></div>
+  <p>Start with a scene, a song or a collection of moments.</p>
+  <form id="new-project"><label>Production name<input name="title" placeholder="Give your film a name" maxlength="200" required></label><button type="submit">Create production</button></form>
+</dialog>
+<main id="studio-shell">
+  <aside id="material-panel" class="library panel" aria-label="Material library">
+    <div class="section-title"><h2>Material</h2><span id="asset-count">0 assets</span><button id="close-material" class="secondary" aria-label="Close material">Done</button></div>
+    <label id="drop-zone" class="drop-zone"><span class="import-symbol">+</span> Import material<input id="files" type="file" multiple><span class="sr-only">Drop or select footage, photographs and audio</span></label>
+    <div class="material-search"><label for="asset-search" class="sr-only">Find material</label><input id="asset-search" type="search" placeholder="Search your material"><label for="asset-kind" class="sr-only">Media type</label><select id="asset-kind"><option value="all">All material</option><option value="video">Video</option><option value="image">Images</option><option value="audio">Audio</option></select></div>
+    <div id="assets" class="asset-list"></div>
+    <details class="library-tools"><summary>Media tools & recovery</summary><div id="health" class="small">Checking local media tools…</div><p class="small">Originals stay unchanged. RAW/ARW and HEIF development is not available yet.</p><section id="media-health-room" aria-label="Media health and recovery"></section></details>
+  </aside>
+  <div class="workarea">
+    <nav class="workspace-tabs" role="tablist" aria-label="Production workspace">
+      <button id="workspace-material-toggle" class="secondary" aria-expanded="false" aria-controls="material-panel">Material</button>
+      <button id="workspace-mode-edit" role="tab" aria-selected="true" data-mode-target="edit">Edit</button>
+      <button id="workspace-mode-sound" role="tab" aria-selected="false" data-mode-target="sound">Sound</button>
+      <button id="workspace-mode-finish" role="tab" aria-selected="false" data-mode-target="finish">Finish</button>
+      <button id="workspace-mode-deliver" role="tab" aria-selected="false" data-mode-target="deliver">Deliver</button>
+    </nav>
+    <section id="edit-panel" class="panel">
+      <div class="project-bar"><h2 id="project-title">Your next cut</h2><details class="format-settings"><summary>Format</summary><div class="settings"><label>Frame rate<select id="fps"><option>24000/1001</option><option>24</option><option>25</option><option>30000/1001</option><option>30</option><option>50</option><option>60000/1001</option><option>60</option></select></label><label>Width<input id="width" type="number" min="16" max="4096" step="2"></label><label>Height<input id="height" type="number" min="16" max="4096" step="2"></label></div></details></div>
+      <div id="recovery-notice" class="notice" hidden></div>
+      <section id="program-host" class="panel program-panel" aria-label="Program preview"></section>
+      <section id="studio-welcome"><h1>Make room for your film.</h1><p>Open a saved production, or bring your footage and music into a new one.</p><button data-create-production>Create production</button></section>
+      <div id="editing" hidden>
+        <div data-workspace-panel="edit" role="tabpanel" aria-labelledby="workspace-mode-edit">
+          <section id="music-room"></section>
+          <details class="numeric-edit"><summary>Detailed shot list</summary><div id="clips" class="clip-list"></div></details><p id="duration" class="small"></p>
+        </div>
+        <div data-workspace-panel="sound" role="tabpanel" aria-labelledby="workspace-mode-sound" hidden>
+          <div class="workspace-heading"><h2>The sound of the scene</h2><p>Your mastered song and sound lanes share the same scene clock.</p></div>
+          <label>Mastered song / soundtrack<select id="soundtrack"></select></label><p class="small">The song starts at zero. Picture edits preserve its timing. Add camera sound explicitly in a sound lane.</p><section id="sound-room" aria-label="Sound Stage"></section>
+        </div>
+        <div data-workspace-panel="finish" role="tabpanel" aria-labelledby="workspace-mode-finish" hidden><section id="text-room" aria-label="Titles and captions"></section></div>
+        <div data-workspace-panel="deliver" role="tabpanel" aria-labelledby="workspace-mode-deliver" hidden>
+          <div class="workspace-heading"><h2>From this cut to the final file.</h2><p>Render the saved edit, review it, and take the handoff into your finishing tools.</p></div>
+          <div class="render-controls"><label class="check"><input id="color-consent" type="checkbox">I reviewed source color. This renderer does not grade S-Log, HDR or ICC images. Known HDR is blocked.</label><button id="render">Render & prepare handoff</button></div>
+          <section id="delivery" class="panel" hidden></section>
+        </div>
+      </div>
+    </section>
+  </div>
+  <aside id="workspace-tools" class="panel" aria-label="Selected material and shot tools">
+    <nav class="tool-tabs" role="tablist" aria-label="Shot tools"><button id="tool-source" role="tab" aria-selected="true" data-tool-target="source">Source</button><button id="tool-takes" role="tab" aria-selected="false" data-tool-target="takes">Takes</button><button id="tool-generate" role="tab" aria-selected="false" data-tool-target="generate">Generate</button><button id="tool-moments" role="tab" aria-selected="false" data-tool-target="moments">Moments</button></nav>
+    <div class="tool-body">
+      <section id="source-panel" class="viewer-panel" role="tabpanel" aria-labelledby="tool-source"><div class="section-title"><h2 id="source-title">A closer look</h2><span id="source-kind" class="tag">Source</span></div><div id="source-view" class="viewer empty">Select material to preview it.<br>Your film stays in view.</div><div id="source-details" class="small"></div><div id="source-actions"></div></section>
+      <section id="memory-room" class="panel" aria-label="Production Memory and Take Stacks" hidden></section>
+      <section id="generate-room" class="panel" aria-label="Governed generative inserts" hidden></section>
+    </div>
+  </aside>
+</main>
+<div id="status" role="status" aria-live="polite">Ready.</div>
 </body></html>
