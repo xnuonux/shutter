@@ -34,7 +34,7 @@ export async function handleMemoryRequest(studio,req,res,url){
         const favorite=url.searchParams.get('favorite');if(favorite!==null&&!['true','false'].includes(favorite))throw Error('memory_search_options');
         json(res,200,searchMoments(studio,p[3],{query:url.searchParams.get('q')||'',favorite:favorite==='true',kind:url.searchParams.get('kind')||'all',offset:Number(url.searchParams.get('offset')||0),limit:50}));return true;
       }
-      if(req.method==='POST'){const input=await body(req);json(res,201,await mediaExclusive(studio,()=>saveMoment(studio,p[3],input.moment,{baseRevision:input.baseRevision})));return true;}
+      if(req.method==='POST'){const input=await body(req);json(res,201,await mediaExclusive(studio,()=>saveMoment(studio,p[3],input.moment,{baseRevision:input.baseRevision,authoredBy:input.authoredBy})));return true;}
     }
     if(production&&p[4]==='memory'&&p.length===6&&req.method==='DELETE'){const input=await body(req);json(res,200,deleteMoment(studio,p[3],p[5],input.baseRevision));return true;}
     if(production&&p[4]==='memory-export'&&p.length===5&&req.method==='GET'){json(res,200,exportProductionMemory(studio,p[3]));return true;}

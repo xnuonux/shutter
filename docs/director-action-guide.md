@@ -27,7 +27,7 @@ The returned version, schemas, limits and examples are authoritative for the run
 
 ## Read, preview, apply
 
-1. Call `shutter_studio_context`. Select the intended production explicitly. With `projectId`, it returns the actual saved timeline revision, main and visible picture intervals, plan warnings and history availability. Source metadata is paged with `assetOffset` and `assetLimit`; follow `nextAssetOffset` when needed. This is metadata, not semantic scene analysis.
+1. Call `shutter_studio_context`. Select the intended production explicitly. With `projectId`, it returns the actual saved timeline revision, main and visible picture intervals, plan warnings, saved direction and history availability. Source metadata is paged with `assetOffset` and `assetLimit`; follow `nextAssetOffset` when needed. This is metadata, not semantic scene analysis.
 2. Call `shutter_preview_actions` with `projectId`, `version`, `baseRevision` and `commands`. A batch contains 1-32 ordered commands. Shutter validates the commands and compiles their result without saving, rendering or contacting a provider.
 3. Inspect `changes`, `result.timeline`, `result.visible` and warnings. Compare the requested outcome with the actual affected fields. Frames and IDs must come from the observed context. A fit mode changes framing, not identity. A source replacement does not assert that its content matches.
 4. Call `shutter_apply_actions` with the identical preview inputs plus its `previewHash` and a stable `requestKey`. A successful batch is one saved revision and one undo step. Failure commits none of the batch.
@@ -56,11 +56,35 @@ For coverage occupying frames 36 through 59, the evidence roles are:
 
 At the start/end of the scene, nonexistent before/after pictures are omitted. Neighboring coverage is represented as visible picture where applicable. Sampling retains the exact source clock and framing used by the exporter, including stills and mixed source frame rates. Main time never restarts.
 
-The `shutter-cutaway-evidence-v1` manifest binds `id`, production, revision, preview hash, coverage interval, exact source seconds, scene frames, local image URLs and image byte hashes. It includes up to 16 relevant saved shot directions, explicitly marked `artist-authored`, with missing/truncated intent reported. `shutter_studio_context` also exposes saved intent. Use these notes as the artist's stated aim, not evidence that the picture satisfies it.
+The `shutter-cutaway-evidence-v1` manifest binds `id`, production, revision, preview hash, coverage interval, exact source seconds, scene frames, local image URLs and image byte hashes. It includes up to 16 relevant saved shot directions, marked `artist-authored` or `director-authored`, with missing/truncated intent reported. `shutter_studio_context` also exposes saved intent. These are stated aims, not evidence that the picture satisfies them.
 
 Shutter rechecks the preview, intent and source integrity before returning new evidence. Changed state rejects obsolete extraction. A repeated unchanged request reuses verified cached pictures; changed intent produces a different evidence identity. Extraction has a 90-second total deadline, at most six images, a maximum 640-pixel long side and a 256 KiB limit per JPEG. It uses existing FFmpeg and original local assets.
 
 A boundary picture cannot establish motion continuity over an entire interval. Audition the scene to assess motion and sound. Evidence excludes titles and audio, and its unmanaged thumbnails are not calibrated color or generation references. The application does not score identity or auto-check the artist's acceptance boxes. A connected director must explain what it actually sees, distinguish uncertainty from evidence, and use the existing preview/apply workflow for an authorized edit.
+
+## Find sources and author direction
+
+Five additional MCP tools connect existing Production Memory and Director workflows to the editing vocabulary. The catalog's `relatedTools` points to them; MCP `tools/list` supplies their closed schemas. They operate on an existing local production and existing imported source assets. They never generate media, upload material or record artist continuity acceptance.
+
+| Tool | Inputs and outcome |
+| --- | --- |
+| `shutter_search_moments` | Production, optional literal query, kind, favorite filter and offset. Returns at most 50 marked source ranges, their revisions and `nextOffset`. Empty query browses. |
+| `shutter_save_moment` | Production, stable moment ID, observed note `baseRevision` and source range/name/notes/tags. Verifies the original asset and range; saves a director-authored note. Use `baseRevision: 0` for a new note. |
+| `shutter_get_direction` | Production and main clip ID. Returns saved direction, latest proposal, `timelineRevision` and `directionRevision` (zero when absent). |
+| `shutter_save_direction` | Production, clip, observed `timelineRevision`, direction `baseRevision`, and brief. Saves the goal, continuity requirements, source query and optional coverage interval after checking both revisions. |
+| `shutter_propose_shots` | Production, clip, current timeline `baseRevision` and `directionRevision`. Saves up to 12 candidates with marked source positions, fit/rejection reasons and a concrete editing command. Does not apply the command. |
+
+Revision names refer to different records. A moment save's `baseRevision` belongs to that moment; a direction save's belongs to direction. A proposal's `baseRevision` belongs to the timeline. Read current values rather than guessing or reusing a revision from another record.
+
+Moment `startUs`/`endUs` and coverage `sourceOffsetUs` are integer microseconds. A one-second offset is `1000000`. Coverage `at`/`end` are integer output frames, end exclusive. Ordinary edit `sourceStart` remains an exact seconds string. Shutter validates the source duration and the full compiled edit in addition to JSON shape.
+
+The practical sequence is: discover assets, inspect the footage, mark useful source ranges, search those notes, read/save direction, and request proposals. Choose a fitting candidate based on actual evidence and the user's intent. Pass its returned `command` unchanged to `shutter_preview_actions`; for coverage, inspect using `shutter_inspect_cutaway`. Explain the proposed choice and execute an authorized edit through `shutter_apply_actions`. Undo uses the existing action workflow.
+
+Search is lexical over names, tags, filenames and saved descriptions; it does not infer faces, motion or story. Only describe what was actually inspected or explicitly supplied by the user. The bridge labels its saved revisions `director-authored`; the editor's user-save path labels its revisions `artist-authored`. These labels identify the latest authoring path, not an authenticated identity, factual verification or endorsement. Existing artist notes are not rewritten or migrated.
+
+After an uncertain note save, search/read back the same stable ID and compare the saved revision and contents. After an uncertain direction save, call `shutter_get_direction`. Repeating the old revision conflicts rather than saving twice; these writes do not have the editing receipt's replay semantics. Do not invent a new note ID or blindly increment the revision to force a retry. A source ID cannot be rebound across productions or assets.
+
+Saved proposals can become obsolete. Rebuild when the source note, direction or timeline changes. General action apply protects the timeline, source plan and preview hash; it does **not** atomically bind a candidate command to subsequent changes in its source description or goal. Applying an edit also does not create an artist-reviewed Take Stack selection. The existing explicit UI acceptance path retains its separate review semantics.
 
 ## Timing and consequences
 
@@ -76,7 +100,7 @@ A boundary picture cannot establish motion continuity over an entire interval. A
 
 `action_request_conflict` means a request key was already used for different input. Inspect its receipt. Use a new key only for a deliberately different operation. `action_arguments` identifies malformed arguments; request the action's schema and correct them. A missing receipt is not evidence of success.
 
-This 31-action surface covers reversible editing of existing Studio material. Asset import, production creation, source scouting, direction briefs, Take Stack review, color processing, local export and paid generation retain their existing app/API workflows; they are not silently advertised as commands in this version. Legacy MCP shot and Blender-stage inspection tools remain separate. A live third-party director session has not been certified by the protocol tests.
+The 31-action surface covers reversible editing of existing Studio material; the five source/direction tools above are separate operations. Asset import, production creation, local source scouting, Take Stack review, color processing, local export and paid generation retain their existing app/API workflows. Legacy MCP shot and Blender-stage inspection tools remain separate. A live third-party director session has not been certified by the protocol tests.
 
 The bridge does not grant generation, spending, uploading, publication or hosted access authority. Do not turn a successful edit into a claim of artist continuity approval. Pixel can use these operations as its execution vocabulary; Pixel's planning and observation loop remains a separate implementation task.
 

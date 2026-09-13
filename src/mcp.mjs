@@ -5,6 +5,7 @@
 import { createInterface } from "node:readline";
 import { createHash } from "node:crypto";
 import {ACTION_VERSION,validateSchema} from '../public/action-contract.mjs';
+import {directorTools,invokeDirectorTool} from './director-tools.mjs';
 const base = process.env.SHUTTER_URL || "http://127.0.0.1:4677";
 const address = new URL(base);
 if (
@@ -21,6 +22,7 @@ const object = (properties, required = []) => ({
 });
 const actionInput={projectId:id,version:{const:ACTION_VERSION},baseRevision:{type:'integer',minimum:0},commands:{type:'array',minItems:1,maxItems:32,items:{type:'object'}}};
 const definitions = [
+  ...directorTools,
   ['shutter_action_catalog','Discover Studio editing actions and effects. Omit types for compact summaries; supply action types for exact input schemas and examples. Read this before planning edits. No generation or spending.',object({types:{type:'array',maxItems:31,items:id}}),true],
   ['shutter_studio_context','Read Studio productions and a bounded page of local source metadata. With projectId, return the saved edit, exact scene/source ranges, revision, warnings and undo/redo availability. No media processing or provider calls.',object({projectId:id,assetOffset:{type:'integer',minimum:0},assetLimit:{type:'integer',minimum:1,maximum:100}}),true],
   ['shutter_preview_actions','Preview 1-32 ordered Studio actions against the observed revision without saving. Returns exact resulting timeline, visible source intervals, changed fields and previewHash. Discover command schemas first. Undo or redo must be standalone.',object(actionInput,Object.keys(actionInput)),true],
@@ -118,6 +120,8 @@ function validate(schema, value) {
   return validateSchema(schema,value);
 }
 function recovery(code){
+  if(code==='direction_revision_conflict')return 'Read shutter_get_direction and rebuild the proposal from its current directionRevision and timelineRevision.';
+  if(code==='memory_revision_conflict')return 'Search shutter_search_moments for the current source note and rebuild the proposal before using it.';
   if(['revision_conflict','action_preview_conflict','evidence_intent_conflict'].includes(code))return 'Read shutter_studio_context again and preview against the current revision before applying.';
   if(code==='action_request_conflict')return 'Read shutter_action_receipt for that key. Use a new key only for a deliberately different edit.';
   if(code==='not_found')return 'Discover current productions and source IDs. A missing receipt is not a successful edit.';
@@ -127,6 +131,7 @@ async function invoke(name, args) {
   const definition = tools.find((t) => t.name === name);
   if (!definition) throw new Error("Unknown tool.");
   validate(definition.inputSchema, args);
+  if(directorTools.some(tool=>tool[0]===name))return invokeDirectorTool(name,args,api);
   if(name==='shutter_action_catalog')return api('/api/media/actions'+(args.types?.length?'?types='+encodeURIComponent(args.types.join(',')):''));
   if(name==='shutter_studio_context')return api('/api/media/action-context?'+new URLSearchParams(Object.entries(args).map(([key,value])=>[key,String(value)])));
   if(['shutter_preview_actions','shutter_apply_actions','shutter_action_receipt'].includes(name)){

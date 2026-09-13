@@ -90,7 +90,7 @@ export async function inspectCutaway(studio,projectId,input,{signal}={}){
       interval,fps:plan.fps,intent,frames:pictures,folder:path.basename(folder),notes:[
         'Pictures use the proposed edit’s source sampling, framing and scene clock. Source times are exact seconds; scene frames start at zero.',
         'Local source pictures only. Text overlays and sound are excluded. These are unmanaged review thumbnails, not calibrated color or generation references.',
-        'Saved intent is artist-authored. Matching time positions does not prove matching action, identity or continuity.'
+        'Saved intent identifies its artist or director authorship. Matching time positions does not prove matching action, identity or continuity.'
       ]});
     published=true;return publicManifest(result,false);
   }finally{if(!published)await cleanPartial(root,folder);}

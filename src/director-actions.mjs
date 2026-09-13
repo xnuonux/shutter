@@ -23,7 +23,7 @@ export function sceneIntent(studio,projectId,clipIds){
   const unique=[...new Set(clipIds)],selected=unique.slice(0,16);
   const records=new Map(studio.list('shot-direction').filter(d=>d.projectId===projectId).map(d=>[d.clipId,d]));
   return {directions:selected.filter(id=>records.has(id)).map(clipId=>{
-    const d=records.get(clipId);return {clipId,revision:d.revision,brief:structuredClone(d.brief),evidence:'artist-authored'};
+    const d=records.get(clipId);return {clipId,revision:d.revision,brief:structuredClone(d.brief),evidence:d.evidence||'artist-authored'};
   }),missingClipIds:selected.filter(id=>!records.has(id)),truncated:unique.length>selected.length};
 }
 
@@ -34,6 +34,7 @@ export function actionCatalog(types=[]){
     units:{scene:'integer output frames; end exclusive',source:'exact nonnegative seconds as decimal or fraction strings',sound:'integer sample frames at 48000 Hz'},
     workflow:['Read action-context and retain the observed revision.','Request the needed action schemas by type.','Preview a complete batch. Inspect changed fields, visible source intervals and warnings.','Apply with the exact commands, baseRevision, previewHash and a stable requestKey.','On an uncertain response, read the receipt or retry identical input with the same key. Never invent a result.'],
     boundaries:['No command generates media, uploads data or spends credits.','Picture ripple edits leave coverage, sound, text and cues pinned to authored scene positions. Review their synchronization.','An edit is not an artist continuity acceptance. Source matching and creative judgment remain separate.','Undo or redo must be the only command in a batch.','Local single-user interface; not hosted authentication.'],
+    relatedTools:['shutter_studio_context','shutter_search_moments','shutter_save_moment','shutter_get_direction','shutter_save_direction','shutter_propose_shots','shutter_inspect_cutaway'],
     actions:requested.map(({type,description,effects,inputSchema,examples})=>({type,description,effects,...(types.length?{inputSchema,examples}:{})}))};
 }
 

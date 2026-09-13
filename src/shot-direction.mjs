@@ -1,7 +1,7 @@
 /** Artist direction and revision-bound source proposals. No model or provider calls. */
 import {fingerprint} from './store.mjs';
 import {getMediaProfile,verifyMediaAsset} from './media-io.mjs';
-import {memoryId,memoryText,rangeFitsTake,sameSelection} from '../public/memory-contract.mjs';
+import {memoryId,memoryText,rangeFitsTake,sameSelection,authoredEvidence} from '../public/memory-contract.mjs';
 import {applyEdit,placements,clipAt,advanceSource,totalFrames,MAX_FRAMES} from '../public/music-edit.mjs';
 import {searchMoments,readMoment,getTakeStack,collectTake} from './production-memory.mjs';
 
@@ -40,16 +40,18 @@ function coverageInterval(studio,edit,shot,coverage){
   return {at,end,frames:end-at,mainViews,returnTo:next?{clipId:next.id,frame:end,assetId:next.assetId,sourceStart:sourceAt(next,end),layer:next.layer||'main'}:null};
 }
 export function readShotDirection(studio,projectId,clipId){
-  selected(studio,projectId,clipId);
+  const {record}=selected(studio,projectId,clipId);
   const direction=currentDirection(studio,projectId,clipId);
-  return {direction,proposal:direction?.latestProposalId?studio.read(direction.latestProposalId,'shot-proposal'):null};
+  return {timelineRevision:record.revision,directionRevision:direction?.revision||0,direction,proposal:direction?.latestProposalId?studio.read(direction.latestProposalId,'shot-proposal'):null};
 }
-export function saveShotDirection(studio,projectId,clipId,{baseRevision,brief}={}){
-  selected(studio,projectId,clipId);const normalized=normalizeBrief(brief);
+export function saveShotDirection(studio,projectId,clipId,{baseRevision,brief,timelineRevision,authoredBy='artist'}={}){
+  if(timelineRevision!==undefined&&(!Number.isSafeInteger(timelineRevision)||timelineRevision<1))throw Error('direction_timeline_revision');
+  selected(studio,projectId,clipId,timelineRevision);const normalized=normalizeBrief(brief),evidence=authoredEvidence(authoredBy);
   if(!Number.isSafeInteger(baseRevision)||baseRevision<0)throw Error('direction_revision');
   return studio.transaction(()=>{
+    selected(studio,projectId,clipId,timelineRevision);
     const prior=currentDirection(studio,projectId,clipId);if((prior?.revision||0)!==baseRevision)throw Error('direction_revision_conflict');
-    return studio.write('shot-direction',{id:directionId(projectId,clipId),schema:'shutter-shot-direction-v1',projectId,clipId,revision:baseRevision+1,brief:normalized,latestProposalId:prior?.latestProposalId||null,evidence:'artist-authored',updatedAt:new Date().toISOString()});
+    return studio.write('shot-direction',{id:directionId(projectId,clipId),schema:'shutter-shot-direction-v1',projectId,clipId,revision:baseRevision+1,brief:normalized,latestProposalId:prior?.latestProposalId||null,evidence,updatedAt:new Date().toISOString()});
   });
 }
 export function proposeShots(studio,projectId,clipId,{baseRevision,directionRevision}={}){
@@ -64,9 +66,9 @@ export function proposeShots(studio,projectId,clipId,{baseRevision,directionRevi
     const command=interval?{type:'coverage-add',coverage:{id:'coverage_'+fingerprint([projectId,clipId,baseRevision,directionRevision,m.id,sourceStart,interval.at,interval.end]),assetId:m.assetId,sourceStart,at:interval.at,frames:interval.frames,fit:shot.fit}}:{type:'replace',clipId,assetId:m.assetId,sourceStart};
     return {momentId:m.id,momentRevision:m.revision,label:m.label,notes:m.notes,tags:m.tags,assetName:m.assetName,mediaKind:m.mediaKind,
       ...candidate,startUs,markedStartUs:m.startUs,sourceSha256:m.sourceSha256,...fit,current:!interval&&sameSelection(candidate,shot,record.timeline.fps),
-      evidence:'artist-authored',continuity:'needs-review',command};
+      evidence:m.evidence||'artist-authored',continuity:'needs-review',command};
   });
-  const value={schema:'shutter-shot-proposal-v1',projectId,clipId,baseRevision,directionRevision,brief:direction.brief,
+  const value={schema:'shutter-shot-proposal-v1',projectId,clipId,baseRevision,directionRevision,brief:direction.brief,directionEvidence:direction.evidence||'artist-authored',
     shot:{...shot,coverage:(record.timeline.coverage||[]).filter(c=>c.at<shot.end&&c.at+c.frames>shot.at)},fps:record.timeline.fps,
     candidates,search:{query:found.query,total:found.total,shown:candidates.length,engine:'authored-words'},
     ...(interval?{interval}:{}),operation:interval?'add-camera-coverage':'replace-source-keep-timing',continuity:'artist-review-required'};

@@ -2,6 +2,7 @@ import {secondsUs,normalizeMoment,rangeFitsTake} from './memory-contract.mjs';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const time=us=>(us/1e6).toFixed(3);
 const exactTime=us=>(us/1e6).toFixed(6);
+const provenance=m=>m?.evidence==='director-authored'?'DIRECTOR NOTE':'ARTIST NOTE';
 /** One connected notebook/search/shot-shelf. Network results remain bound to their original context. */
 export class MemoryRoom {
   constructor({root,getEdit,getRecord,getState,getSource,getProject,isDirty,isBusy,api,action,notify,saveCut,applySaved,audition,clearAudition,openSource,getSourceTime}){
@@ -39,7 +40,7 @@ export class MemoryRoom {
   }
   fill(note,assetId){
     this.note=note;this.formAsset=note?.assetId||assetId||null;const asset=this.getState().assets.find(a=>a.id===this.formAsset);
-    this.$('#memory-source').textContent=asset?`Attached to ${asset.name}. Saved words are artist-authored.`:'Select source material, then choose New moment.';
+    this.$('#memory-source').textContent=asset?`Attached to ${asset.name}. Saved words are ${note?.evidence==='director-authored'?'director-authored':'artist-authored'}.`:'Select source material, then choose New moment.';
     this.$('#memory-in').value=note?exactTime(note.startUs):'0';this.$('#memory-out').value=note?exactTime(note.endUs):String(Math.min(asset?.media?.duration||3,3));
     this.$('#memory-label').value=note?.label||'';this.$('#memory-notes').value=note?.notes||'';this.$('#memory-tags').value=note?.tags.join(', ')||'';this.$('#memory-favorite').checked=note?.favorite||false;this.pending=false;this.formStatus();
   }
@@ -57,11 +58,11 @@ export class MemoryRoom {
     let result;try{result=await this.api(`/api/media/productions/${project}/memory?q=${encodeURIComponent(q)}&favorite=${favorite}&offset=${more?this.nextOffset||0:0}`);}catch(e){if(token===this.searchToken)this.$('#memory-count').textContent='Search failed; previous results have not been refreshed.';throw e;}
     if(token!==this.searchToken||project!==this.getProject())return;
     this.results=more?[...this.results,...result.results]:result.results;this.nextOffset=result.nextOffset;
-    this.$('#memory-count').textContent=`${result.total} matching moments · local word/prefix search · artist-authored evidence`;
+    this.$('#memory-count').textContent=`${result.total} matching moments · local word/prefix search · authored evidence`;
     this.$('#memory-more').hidden=result.nextOffset===null;this.renderResults();
   }
   renderResults(){
-    this.$('#memory-results').innerHTML=this.results.map(m=>`<article class="memory-card"><span class="memory-badge">${m.favorite?'FAVORITE · ':''}ARTIST NOTE</span><strong>${esc(m.label)}</strong><p>${esc(m.notes)}</p><small>${esc(m.assetName)} · ${time(m.startUs)}–${time(m.endUs)}s<br>${esc(m.tags.join(' / '))}</small><div class="memory-bar"><button class="secondary" data-peek="${esc(m.id)}">View range</button><button class="secondary" data-collect="${esc(m.id)}">Collect for shot</button><button class="secondary" data-note="${esc(m.id)}">Edit note</button><button class="secondary" data-delete="${esc(m.id)}">Delete note</button></div></article>`).join('')||'<p class="small">No moments found. Mark a useful range, give it words, and it becomes part of this production’s memory.</p>';
+    this.$('#memory-results').innerHTML=this.results.map(m=>`<article class="memory-card"><span class="memory-badge">${m.favorite?'FAVORITE · ':''}${provenance(m)}</span><strong>${esc(m.label)}</strong><p>${esc(m.notes)}</p><small>${esc(m.assetName)} · ${time(m.startUs)}–${time(m.endUs)}s<br>${esc(m.tags.join(' / '))}</small><div class="memory-bar"><button class="secondary" data-peek="${esc(m.id)}">View range</button><button class="secondary" data-collect="${esc(m.id)}">Collect for shot</button><button class="secondary" data-note="${esc(m.id)}">Edit note</button><button class="secondary" data-delete="${esc(m.id)}">Delete note</button></div></article>`).join('')||'<p class="small">No moments found. Mark a useful range, give it words, and it becomes part of this production’s memory.</p>';
     for(const b of this.root.querySelectorAll('[data-peek]'))b.onclick=()=>this.run(()=>{const m=this.results.find(m=>m.id===b.dataset.peek);return this.openSource(m.assetId,m.startUs/1e6,m.endUs/1e6);});
     for(const b of this.root.querySelectorAll('[data-note]'))b.onclick=()=>this.run(()=>{this.assertForm();this.fill(this.results.find(m=>m.id===b.dataset.note));this.$('.memory-author').open=true;});
     for(const b of this.root.querySelectorAll('[data-delete]'))b.onclick=()=>this.run(async()=>{this.assertForm();const m=this.results.find(m=>m.id===b.dataset.delete);if(!confirm('Delete this searchable note? Collected take snapshots and media stay intact.'))return;await this.api(`/api/media/productions/${this.getProject()}/memory/${m.id}`,{method:'DELETE',body:JSON.stringify({baseRevision:m.revision})});if(this.note?.id===m.id)this.fill(null,this.getSource());await this.search();});

@@ -2,7 +2,7 @@
 import crypto from 'node:crypto';
 import {fingerprint} from './store.mjs';
 import {getMediaProfile,verifyMediaAsset} from './media-io.mjs';
-import {MEMORY_LIMITS,memoryId,memoryText,normalizeMoment,searchExpression,sourceSelection,sameSelection,rangeFitsTake,takeProposal} from '../public/memory-contract.mjs';
+import {MEMORY_LIMITS,memoryId,memoryText,normalizeMoment,searchExpression,sourceSelection,sameSelection,rangeFitsTake,takeProposal,authoredEvidence} from '../public/memory-contract.mjs';
 const ready=new WeakSet();
 function words(alias){return `coalesce(json_extract(${alias}.payload,'$.label'),'')||' '||coalesce(json_extract(${alias}.payload,'$.notes'),'')||' '||coalesce(json_extract(${alias}.payload,'$.tags'),'')||' '||coalesce(json_extract(${alias}.payload,'$.assetName'),'')`;}
 export function ensureMemory(studio){
@@ -25,8 +25,8 @@ export function ensureMemory(studio){
 function optional(studio,id,kind){const row=studio.db.prepare('SELECT kind FROM records WHERE id=?').get(id);if(!row)return null;if(row.kind!==kind)throw Error('memory_identity_conflict');return studio.read(id,kind);}
 function project(studio,id){memoryId(id);studio.getProduction(id);}
 export function readMoment(studio,projectId,id){project(studio,projectId);const m=studio.read(memoryId(id),'memory-moment');if(m.projectId!==projectId)throw Error('not_found');return m;}
-export async function saveMoment(studio,projectId,input,{baseRevision=0}={}){
-  project(studio,projectId);const moment=normalizeMoment(input);
+export async function saveMoment(studio,projectId,input,{baseRevision=0,authoredBy='artist'}={}){
+  project(studio,projectId);const moment=normalizeMoment(input),evidence=authoredEvidence(authoredBy);
   if(!Number.isSafeInteger(baseRevision)||baseRevision<0)throw Error('memory_revision');
   const asset=await verifyMediaAsset(studio,moment.assetId),profile=getMediaProfile(studio,moment.assetId);
   if(profile.kind==='image'){if(moment.startUs!==0)throw Error('image_source_start');}
@@ -40,7 +40,7 @@ export async function saveMoment(studio,projectId,input,{baseRevision=0}={}){
     if(!prior&&studio.db.prepare("SELECT count(*) AS n FROM records WHERE kind='memory-moment' AND json_extract(payload,'$.projectId')=?").get(projectId).n>=MEMORY_LIMITS.notes)throw Error('memory_note_limit');
     return studio.write('memory-moment',{...moment,schema:'shutter-memory-moment-v1',projectId,revision:baseRevision+1,
       sourceSha256:asset.sha256,assetName:asset.name,mediaKind:profile.kind,technical:{width:profile.width,height:profile.height,fps:profile.fps,codec:profile.videoCodec},
-      evidence:'artist-authored',createdAt:prior?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()});
+      evidence,createdAt:prior?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()});
   });
 }
 export function deleteMoment(studio,projectId,id,baseRevision){
@@ -92,7 +92,7 @@ export async function collectTake(studio,projectId,clipId,{baseRevision,stackRev
       ...sourceSelection(clip,record.timeline.fps),endUs:profile.kind==='image'?MEMORY_LIMITS.rangeUs:Math.floor(profile.duration*1e6),
       sourceSha256:currentAsset.sha256,evidence:'saved-shot',capturedRevision:record.revision});
     const candidate={id:'take_'+crypto.randomUUID(),label:moment.label,assetId:moment.assetId,sourceStart:`${moment.startUs}/1000000`,endUs:moment.endUs,
-      sourceSha256:moment.sourceSha256,evidence:'artist-authored',momentId,momentRevision,notes:moment.notes,tags:moment.tags};
+      sourceSha256:moment.sourceSha256,evidence:moment.evidence||'artist-authored',momentId,momentRevision,notes:moment.notes,tags:moment.tags};
     if(!stack.candidates.some(c=>c.momentId===momentId&&c.momentRevision===momentRevision))stack.candidates.push(candidate);
     if(stack.candidates.length>MEMORY_LIMITS.takes)throw Error('take_stack_limit');
     delete stack.timelineRevision;delete stack.shotFrames;delete stack.fps;
@@ -115,5 +115,5 @@ export function exportProductionMemory(studio,projectId){
   project(studio,projectId);return {schema:'shutter-production-memory-export-v1',projectId,
     moments:studio.list('memory-moment').filter(m=>m.projectId===projectId),stacks:studio.list('take-stack').filter(s=>s.projectId===projectId),
     directions:studio.list('shot-direction').filter(d=>d.projectId===projectId),shotProposals:studio.list('shot-proposal').filter(p=>p.projectId===projectId),
-    limitations:['Metadata only; not a portable media/database backup.','Search is lexical over artist-authored words; no visual identity inference or transcription.']};
+    limitations:['Metadata only; not a portable media/database backup.','Search is lexical over authored words; inspect each note’s authorship. No visual identity inference or transcription.']};
 }

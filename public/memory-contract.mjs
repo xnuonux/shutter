@@ -1,6 +1,10 @@
 /** Shared, provider-free Production Memory and Take Stack contracts. */
 import {exact,asText,samplingFor} from './music-edit.mjs';
 export const MEMORY_LIMITS=Object.freeze({notes:5000,takes:24,query:240,rangeUs:86400e6,scoutUs:120e6,scenes:200,thumbnails:12});
+export function authoredEvidence(author='artist'){
+  if(!['artist','director'].includes(author))throw Error('memory_authorship');
+  return author+'-authored';
+}
 export function memoryId(v){if(typeof v!=='string'||!/^[A-Za-z0-9_-]{1,100}$/.test(v))throw Error('memory_identity');return v;}
 export function memoryText(v,max,required=false){
   if(typeof v!=='string'||[...v].length>max||/[\u0000-\u0008\u000b-\u001f\u007f\ud800-\udfff]/u.test(v)||required&&!v.trim())throw Error('memory_text');
