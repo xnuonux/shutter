@@ -6,11 +6,11 @@
 
 The implementation checkpoint and historical prototype notes below remain distinct from that long-term ambition.
 
-## Current product map · September 10, 2026
+## Current implementation · September 12, 2026
 
-Start with [the product blueprint](docs/product-blueprint.md) for the complete direction and build order, and [the current checkpoint](docs/current-checkpoint.md) for implemented behaviour. The local studio now has Direct, Canvas and Edit, paid H3 Max integration, and a source-range/coverage timeline. The blueprint distinguishes these working foundations from planned general media editing, sound, Pixel orchestration and workflow execution.
+Start with [the current checkpoint](docs/current-checkpoint.md) and [the integration evidence](docs/takeover-integration-2026-09-12.md). The asset-backed Studio at `/media-studio` accepts camera footage, generated video, photographs and mastered audio. It includes editing, sound lanes, finishing text, media recovery, authored Production Memory, Take Stacks and governed H3 Generative Inserts. Direct, Canvas, Moment and the earlier scene timeline remain available.
 
-The next implementation milestone makes imported video and generated takes equally usable in the editor, with stable preview and explicit source replacement. No new provider or paid generation is needed for that milestone.
+Camera coverage now replaces an interval on the same scene clock, including across main-shot boundaries. Preview, export and generation reference frames use the visible edit; returning to the main view advances by the elapsed coverage duration. The original sources and mastered song remain intact. Local browser verification used existing H3 footage with no paid calls. Product-wide visual polish, semantic scene understanding and Pixel orchestration remain further work; see [the product blueprint](docs/product-blueprint.md).
 
 ## Original prototype notes
 
