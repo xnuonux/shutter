@@ -14,6 +14,7 @@ export class MusicRoom {
       <div class="timeline-legend"><span>PICTURE · drag a shot to reorder</span><span id="wave-label">MASTER · unchanged</span><label class="check"><input id="cut-snap" type="checkbox" checked>Snap to beats / cues</label><button id="build-waveform" class="secondary mini">Build waveform</button></div>
       <div class="editing-tools"><button id="cut-split" class="secondary">Split at playhead <kbd>S</kbd></button><button id="cut-duplicate" class="secondary">Duplicate</button><button id="cut-replace" class="secondary">Replace with selected material</button><button id="cut-delete" class="secondary">Remove picture</button><button id="add-cue" class="secondary">Add cue <kbd>M</kbd></button></div>
       <div id="cut-inspector" class="cut-inspector"><p class="small">Select a shot to trim, slip or reframe. Picture edits do not move the song or its cues.</p></div>
+      <details class="coverage-room"><summary>Camera coverage · same scene time</summary><p class="small">Cover an interval with the selected material. The main footage keeps advancing underneath; removing coverage reveals it again. The scene and soundtrack keep their duration.</p><div class="coverage-fields"><label>Scene in · frame<input id="coverage-at" type="number" min="0" step="1" value="0"></label><button id="coverage-in-playhead" class="secondary mini">In at playhead</button><label>Scene out · frame<input id="coverage-end" type="number" min="1" step="1" value="24"></label><button id="coverage-out-playhead" class="secondary mini">Out at playhead</button><label>Source in · seconds<input id="coverage-source" value="0" inputmode="decimal"></label><button id="coverage-place" class="secondary">Cover with selected material</button></div><div id="coverage-list"></div></details>
       <details class="music-map"><summary>Song map · tempo, bars & cues</summary><div class="music-map-fields"><label>Tempo (quarter-note BPM)<input id="song-bpm" inputmode="decimal" value="120"></label><label>Beats per bar<input id="song-meter" type="number" min="1" max="12" value="4"></label><label>Beat unit<select id="song-unit"><option value="2">Half note</option><option value="4" selected>Quarter note</option><option value="8">Eighth note</option><option value="16">Sixteenth note</option></select></label><label>First beat (output frame)<input id="song-offset" type="number" min="0" value="0"></label><button id="song-apply" class="secondary">Apply song map</button><button id="song-align" class="secondary">First beat at playhead</button><button id="song-clear" class="secondary">Clear grid</button></div><p class="small">Use your FL Studio tempo or place the first beat by ear. The grid is explicit—not automatic beat detection. Cues stay on the song clock when picture moves.</p><div id="song-cues" class="cue-list"></div></details>
       <p class="small timeline-help">Space play/pause · ← → one frame · Shift+← → one second · S split · M cue. Source-rate browser preview is approximate; render the saved revision for export review.</p>`;
     program.innerHTML=`<div class="section-title"><h2>Program</h2><span class="tag">LIVE DRAFT PREVIEW</span></div><div class="program-view viewer"><video id="cut-video" muted playsinline preload="metadata" hidden></video><img id="cut-image" alt="Selected picture in the cut" hidden><div id="cut-empty" class="small">Place your first shot. Keep your song.</div></div><audio id="cut-audio" preload="metadata"></audio><p id="program-note" class="small">Playback uses the original or a viewing proxy. Draft text layout is approximate; use Finish to check an actual compositor frame.</p>`;
@@ -27,6 +28,15 @@ export class MusicRoom {
       const a=this.getState().assets.find(a=>a.id===this.getSource());if(!a||!['video','image'].includes(a.kind))throw Error('Select footage or a photo in Material first.');
       this.command({type:'replace',clipId:this.selected,assetId:a.id,sourceStart:'0'});this.notify('Take replaced. Placement, shot length, master and cues are unchanged. Undo restores the prior take.');
     });
+    bind('#coverage-in-playhead',()=>{this.$('#coverage-at').value=this.frame;});
+    bind('#coverage-out-playhead',()=>{this.$('#coverage-end').value=this.frame;});
+    bind('#coverage-place',()=>{
+      const a=this.getState().assets.find(a=>a.id===this.getSource());
+      if(!a||!['video','image'].includes(a.kind))throw Error('Select the alternate view in Material first.');
+      const at=Number(this.$('#coverage-at').value),end=Number(this.$('#coverage-end').value);
+      this.command({type:'coverage-add',coverage:{id:uid('coverage'),assetId:a.id,at,frames:end-at,sourceStart:this.$('#coverage-source').value,fit:'contain'}});
+      this.notify('Coverage placed. The main footage resumes at elapsed scene time.');
+    });
     bind('#add-cue',()=>this.addCue());bind('#song-apply',()=>this.applyMusic());bind('#song-align',()=>{this.$('#song-offset').value=this.frame;this.applyMusic();});bind('#song-clear',()=>this.command({type:'music',music:null}));
     bind('#build-waveform',()=>this.action(async()=>{
       const id=this.getEdit()?.soundtrack?.assetId;if(!id)throw Error('Select your mastered song first.');
@@ -38,9 +48,9 @@ export class MusicRoom {
     this.$('#cut-zoom').onchange=e=>{this.zoom=Number(e.target.value);this.resize();};
     this.canvas.addEventListener('pointerdown',e=>{
       if(this.isBusy())return;this.canvas.focus();this.pause();const point=this.point(e),edit=this.getEdit();if(!edit)return;
-      const c=totalFrames(edit)?clipAt(edit,Math.min(totalFrames(edit)-1,point.frame)):null;
-      this.drag={x:e.clientX,id:point.y>=30&&point.y<=94?c?.id:null,frame:point.frame};this.canvas.setPointerCapture(e.pointerId);
-      if(point.y>=30&&point.y<=94&&c)this.selected=c.id;
+      const c=placements(edit).find(c=>c.at<=point.frame&&point.frame<c.end);
+      this.drag={x:e.clientX,id:point.y>=30&&point.y<=70?c?.id:null,frame:point.frame};this.canvas.setPointerCapture(e.pointerId);
+      if(point.y>=30&&point.y<=70&&c)this.selected=c.id;
       this.seek(point.frame);this.inspector();
     });
     this.canvas.addEventListener('pointermove',e=>{if(this.drag){this.drag.target=this.point(e).frame;this.draw();}});
@@ -87,6 +97,10 @@ export class MusicRoom {
     this.$('#build-waveform').disabled=!id;this.inspector();this.resize();this.showPicture();this.positionLabel();
   }
   inspector(){
+    const covers=this.getEdit()?.coverage||[];
+    this.$('#coverage-list').innerHTML=covers.map(c=>`<div class="coverage-entry"><button type="button" class="secondary mini" data-view-coverage="${esc(c.id)}">${esc(this.getState().assets.find(a=>a.id===c.assetId)?.name||'Alternate view')} · ${formatPosition(c.at,this.getEdit().fps)}–${formatPosition(c.at+c.frames,this.getEdit().fps)}</button><button type="button" class="secondary mini" data-remove-coverage="${esc(c.id)}">Reveal main view</button></div>`).join('');
+    for(const b of this.$('#coverage-list').querySelectorAll('[data-view-coverage]'))b.onclick=()=>{const c=covers.find(c=>c.id===b.dataset.viewCoverage);this.pause();this.seek(c.at);};
+    for(const b of this.$('#coverage-list').querySelectorAll('[data-remove-coverage]'))b.onclick=()=>{if(!this.isBusy())this.safely(()=>this.command({type:'coverage-remove',coverageId:b.dataset.removeCoverage}));};
     const c=this.getEdit()?.clips.find(c=>c.id===this.selected),el=this.$('#cut-inspector');
     for(const id of ['cut-split','cut-duplicate','cut-delete','cut-replace'])this.$('#'+id).disabled=!c;
     if(!c){el.innerHTML='<p class="small">Select a shot to trim, slip or reframe. Picture edits do not move the song or its cues.</p>';return;}
@@ -112,9 +126,11 @@ export class MusicRoom {
     for(let sec=0;sec*this.fps()<=extent;sec+=tickSeconds){const px=x(sec*this.fps());ctx.strokeStyle='#333640';ctx.beginPath();ctx.moveTo(px,22);ctx.lineTo(px,209);ctx.stroke();ctx.fillStyle='#a6a7b5';ctx.fillText(formatPosition(sec*this.fps(),edit.fps),px+4,220);}
     if(edit.music)for(const b of beatGrid(edit.music,edit.fps,0,extent,Math.max(16,Math.floor(w/5)))){const px=x(b.frame);ctx.strokeStyle=b.beat===1?'#685063':'#302833';ctx.beginPath();ctx.moveTo(px,21);ctx.lineTo(px,104);ctx.stroke();if(b.beat===1&&w/extent*(this.fps()*60/asNumber(exact(edit.music.bpm))*edit.music.beatsPerBar)>35){ctx.fillStyle='#cba6bb';ctx.fillText(String(b.bar),px+3,20);}}
     for(const c of placements(edit)){
-      const px=x(c.at),cw=Math.max(1,x(c.frames));ctx.fillStyle=c.id===this.selected?'#704453':'#343945';ctx.fillRect(px+1,32,Math.max(1,cw-2),62);ctx.strokeStyle=c.id===this.selected?'#e1a7bb':'#626879';ctx.strokeRect(px+1.5,32.5,Math.max(1,cw-3),61);
-      ctx.save();ctx.beginPath();ctx.rect(px+4,34,Math.max(0,cw-8),58);ctx.clip();ctx.fillStyle='#f3eff1';ctx.font='12px system-ui';ctx.fillText(this.getState().assets.find(a=>a.id===c.assetId)?.name||'Shot',px+8,54);ctx.fillStyle='#cabcc8';ctx.font='10px system-ui';ctx.fillText(`${c.frames}f · ${(c.frames/this.fps()).toFixed(2)}s`,px+8,77);ctx.restore();
+      const px=x(c.at),cw=Math.max(1,x(c.frames));ctx.fillStyle=c.id===this.selected?'#704453':'#343945';ctx.fillRect(px+1,32,Math.max(1,cw-2),38);ctx.strokeStyle=c.id===this.selected?'#e1a7bb':'#626879';ctx.strokeRect(px+1.5,32.5,Math.max(1,cw-3),37);
+      ctx.save();ctx.beginPath();ctx.rect(px+4,34,Math.max(0,cw-8),34);ctx.clip();ctx.fillStyle='#f3eff1';ctx.font='12px system-ui';ctx.fillText(this.getState().assets.find(a=>a.id===c.assetId)?.name||'Shot',px+8,48);ctx.fillStyle='#cabcc8';ctx.font='10px system-ui';ctx.fillText(`${c.frames}f · ${(c.frames/this.fps()).toFixed(2)}s`,px+8,63);ctx.restore();
     }
+    ctx.fillStyle='#1b2827';ctx.fillRect(0,74,w,26);
+    for(const c of edit.coverage||[]){const px=x(c.at),cw=Math.max(1,x(c.frames));ctx.fillStyle='#385b52';ctx.fillRect(px+1,75,Math.max(1,cw-2),24);ctx.save();ctx.beginPath();ctx.rect(px+4,75,Math.max(0,cw-8),24);ctx.clip();ctx.fillStyle='#d5e9dc';ctx.fillText('COVERAGE · '+(this.getState().assets.find(a=>a.id===c.assetId)?.name||'Alternate'),px+6,91);ctx.restore();}
     if(this.wave){
       const wave=this.wave;for(let c=0;c<wave.channels;c++){const y=126+c*42,amp=18;ctx.strokeStyle=c?'#71a398':'#9db4cc';ctx.beginPath();const peaks=wave.peaks[c];
         for(let px=0;px<w;px++){const a=Math.floor(px/w*extent/this.fps()*wave.sampleRate/wave.samplesPerBin),b=Math.min(peaks.length/2-1,Math.floor((px+1)/w*extent/this.fps()*wave.sampleRate/wave.samplesPerBin));if(a>=peaks.length/2)break;let min=1,max=-1;for(let i=a;i<=Math.max(a,b);i++){min=Math.min(min,peaks[i*2]);max=Math.max(max,peaks[i*2+1]);}ctx.moveTo(px,y-Math.max(-1,Math.min(1,max))*amp);ctx.lineTo(px,y-Math.max(-1,Math.min(1,min))*amp);}ctx.stroke();ctx.fillStyle='#9babb8';ctx.fillText(wave.channels===1?'MONO':c?'R':'L',4,y-20);}

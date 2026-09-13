@@ -16,6 +16,10 @@ export function createTimelineUI({production,data,esc,media,api,notify,refresh,m
   function draw(){
     if(!root?.isConnected)return;
     const t=record.timeline,p=record.plan;
+    if(t.format==='shutter-media-edit-v1'){
+      root.innerHTML=`<div class="production-head"><div><div class="eyeline">${esc(production().title)} / the cutting room</div><h1>Open your media edit</h1><p class="subtle">This production uses the studio timeline for imported footage, music and alternate views.</p><a class="primary" id="open-media-edit" href="/media-studio?project=${encodeURIComponent(loadedProject)}">Open in Studio</a></div></div>`;
+      return;
+    }
     if(!chosen())selected=t.main[0].id;
     const clip=chosen(),coverage=t.coverage.some(c=>c.id===selected),take=job(clip.jobId);
     const available=data().jobs.filter(j=>j.projectId===loadedProject&&j.state==='ready'&&j.output&&j.media?.fps===t.fps);

@@ -96,14 +96,15 @@ test('record changes while upload streams are detected before installation',()=>
  await fs.unlink(f.file);async function* collision(){yield f.bytes.subarray(0,30);f.studio.write('asset',{...f.asset,filename:f.asset.sha256+'.different'});yield f.bytes.subarray(30);}
  await assert.rejects(restoreMissingAsset(f.studio,f.asset.id,collision(),{recordKey:assetRecordKey(f.asset)}),/record_conflict/);assert.deepEqual(await fs.readdir(path.dirname(f.file)),[]);
 }));
-test('symbolic links are neither read nor replaced, including dangling links',()=>use(async f=>{
- await fs.unlink(f.file);const external=path.join(f.studio.root,'outside.wav');await fs.writeFile(external,f.bytes);await fs.symlink(external,f.file);
+test('symbolic links are neither read nor replaced, including dangling links',t=>use(async f=>{
+ await fs.unlink(f.file);const external=path.join(f.studio.root,'outside.wav');await fs.writeFile(external,f.bytes);
+ try{await fs.symlink(external,f.file);}catch(e){if(e.code==='EPERM'){t.skip('File symlinks require an OS privilege unavailable on this host');return;}throw e;}
  assert.equal((await inspectStoredAsset(f.studio,f.asset.id)).reason,'unsafe-file-type');
  await assert.rejects(restoreMissingAsset(f.studio,f.asset.id,stream(f.bytes),{recordKey:assetRecordKey(f.asset)}),/existing_file_protected/);
  await fs.unlink(external);assert.equal((await inspectStoredAsset(f.studio,f.asset.id)).reason,'unsafe-file-type');assert.equal((await fs.lstat(f.file)).isSymbolicLink(),true);
 }));
 test('symbolic-linked asset directories are not traversed',()=>use(async f=>{
- const assets=path.dirname(f.file),elsewhere=path.join(f.studio.root,'outside');await fs.rename(assets,elsewhere);await fs.symlink(elsewhere,assets);
+ const assets=path.dirname(f.file),elsewhere=path.join(f.studio.root,'outside');await fs.rename(assets,elsewhere);await fs.symlink(elsewhere,assets,process.platform==='win32'?'junction':'dir');
  assert.equal((await inspectStoredAsset(f.studio,f.asset.id)).reason,'unsafe-directory');
  await assert.rejects(restoreMissingAsset(f.studio,f.asset.id,stream(f.bytes),{recordKey:assetRecordKey(f.asset)}),/existing_file_protected/);
 }));

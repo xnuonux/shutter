@@ -92,7 +92,7 @@ export async function checkDelivery(studio,cutId,input={}, {signal}={}) {
       if(video&&duration>0&&duration<=14401) {
         report.picture=await examine('picture-events',()=>inspectPictureEvents(studio.assetPath(output.id),video.index,duration,{signal}));
         if(report.picture)for(const event of report.picture.events) {
-          event.authoredStillClipIds=plan.clips.filter(c=>c.sourceKind==='image'&&c.at/rateValue(rational(plan.fps))<event.endSeconds&&
+          event.authoredStillClipIds=(plan.pictureClips||plan.clips).filter(c=>c.sourceKind==='image'&&c.at/rateValue(rational(plan.fps))<event.endSeconds&&
             (c.at+c.frames)/rateValue(rational(plan.fps))>event.startSeconds).map(c=>c.id);
           findings.push({code:event.kind,subject:'encoded-picture',severity:'review',
             message:event.kind==='near-black'?'Near-black interval: may be an intentional dark scene or fade.':'Static-looking interval: may be an intentional still or locked shot.',...event});

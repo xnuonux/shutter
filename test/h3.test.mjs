@@ -82,7 +82,8 @@ test('reference quote pools decoded image, video and audio tokens using output r
  const video=studio.importAsset(Buffer.from([0,0,0,16,102,116,121,112,105,115,111,109,0,0,0,0]));
  const audio=studio.importAsset(Buffer.from('RIFF0000WAVEdata'));
  studio.saveProduction(production.id,1,{...production,shots:[{...production.shots[0],extraReferences:[{assetId:video.id,role:'motion only'},{assetId:audio.id,role:'voice only'}]}]});
- const renderer=new Renderer(studio,{fal:{probe:async file=>file.endsWith('.mp4')?{kind:'video',duration:2,width:256,height:144,decoded:true}:file.endsWith('.wav')?{kind:'audio',duration:5,decoded:true}:{kind:'image',width:1024,height:1024,decoded:true}}});
+ const renderer=new Renderer(studio,{fal:{key:'offline-test-key',probe:async file=>file.endsWith('.mp4')?{kind:'video',duration:2,width:256,height:144,decoded:true}:file.endsWith('.wav')?{kind:'audio',duration:5,decoded:true}:{kind:'image',width:1024,height:1024,decoded:true}}});
+ renderer.fal.request=async()=>({data:{prices:[{endpoint_id:'minimax/h3-max/reference-to-video',unit_price:.05,unit:'seconds',currency:'USD'}]},units:null});
  const job=studio.prepareJob(production.id,'ridge','pooled');const quoted=await renderer.fal.prepare(job.id);
  assert.equal(quoted.quote.referenceTokens,8220);assert.equal(quoted.quote.estimatedUsd,.33248);assert.equal(quoted.quote.reservedUsd,.333);
 });

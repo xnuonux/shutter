@@ -5,7 +5,7 @@ import {h3Input,h3Snapshot} from '../src/h3-spec.mjs';
 const image={id:'img',sha256:'a',kind:'image',mime:'image/png',bytes:1},video={id:'vid',sha256:'b',kind:'video',mime:'video/mp4',bytes:1};
 class FakeStudio{
  constructor(job){this.records=new Map();this.jobs=new Map(job?[[job.id,structuredClone(job)]]:[]);this.assets=new Map([[image.id,image],[video.id,video]]);}
- read(id,kind){const r=this.records.get(id);if(!r||r.kind!==kind)throw Error('not_found');return structuredClone(r.value);}
+ read(id,kind){if(kind==='asset')return this.verifyAsset(id);const r=this.records.get(id);if(!r||r.kind!==kind)throw Error('not_found');return structuredClone(r.value);}
  write(kind,value){this.records.set(value.id,{kind,value:structuredClone(value)});return structuredClone(value);}
  listJobs(){return [...this.jobs.values()].map(structuredClone);}
  getJob(id){const j=this.jobs.get(id);if(!j)throw Error('not_found');return structuredClone(j);}

@@ -11,13 +11,12 @@ state={'assets':[{'id':asset_a,'name':'Camera A.mp4','kind':'video'},{'id':asset
 planned={'id':'insert_'+'1'*64,'revision':1,'state':'planned','timelineRevision':7,'current':True,'request':{'clipId':'a','kind':'new-angle','prompt':'new adjacent angle','duration':5,'resolution':'480P','quality':'balanced'},'renderProfile':{'tier':'draft'},'references':[{'assetId':'ref_image','kind':'image','role':'appearance-state','authority':'appearance-state','sourceClipId':'a'},{'assetId':'ref_video','kind':'video','role':'motion-time','authority':'motion-time','sourceClipId':'a','audioIncluded':False}],'disclosure':{'leavesDeviceOnSubmission':['prompt','1 derived PNG reference image','1 derived motion reference video'],'staysLocal':['camera originals','master soundtrack'],'submissionState':'not-submitted'},'spending':{'hardLimitUsd':.5}}
 with sync_playwright() as p:
  browser=p.chromium.launch(executable_path=os.environ.get('SHUTTER_TEST_CHROMIUM','/usr/bin/chromium'),headless=True)
- page=browser.new_page(viewport={'width':1200,'height':1000});page.on('pageerror',lambda e:report['errors'].append(str(e)))
+ page=browser.new_page(viewport={'width':1200,'height':1000});page.set_default_timeout(2000);page.on('pageerror',lambda e:report['errors'].append(str(e)))
  page.set_content(f'''<body><select id="projects"><option value="{project}" selected>Demo</option></select><span id="revision">SAVED REVISION 7</span><button id="save">Save cut</button><form id="new-project"></form><section id="memory-room"><details><select id="memory-shot"><option value="a">A</option></select><button id="memory-load-stack"></button></details></section><div id="text-form-status"></div><section id="generate-room"></section></body>''')
  page.add_style_tag(content=':root{--line:#393944;--muted:#999;--ink:#eee}.secondary{} .tag{} .small{} .notice{} .check{}'+css)
  page.evaluate('''({timeline,state,planned})=>{
  window.__fixture={timeline,state,planned:structuredClone(planned),inserts:[],calls:[]};
  window.confirm=()=>true;window.crypto.randomUUID=()=> 'fixture-key';
- history.replaceState({},'',location.pathname+'?project=prod_demo');
  window.fetch=async(url,opt={})=>{__fixture.calls.push({url,method:opt.method||'GET',body:opt.body?JSON.parse(opt.body):null});let data;
  if(url==='/api/media/state')data=__fixture.state;
  else if(url==='/api/media/productions/prod_demo/timeline')data=__fixture.timeline;
@@ -30,11 +29,13 @@ with sync_playwright() as p:
  else throw Error('unexpected '+url);
  return {ok:true,status:200,json:async()=>structuredClone(data)};};
  }''',{'timeline':timeline,'state':state,'planned':planned})
- code=source.replace('export class GenerateRoom','class GenerateRoom');page.evaluate(code)
- page.locator('#generate-room details').evaluate('(d)=>d.open=true');page.wait_for_timeout(20)
+ code="(function(){"+source.replace('export class GenerateRoom','class GenerateRoom').replace("if(root){const room=new GenerateRoom(root);window.__shutterGenerateRoom=room;if(sessionStorage.getItem('shutter-generate-open')){sessionStorage.removeItem('shutter-generate-open');root.querySelector('details').open=true;}room.sync().catch(()=>{});}", "window.__GenerateRoom=GenerateRoom;")+"})()"
+ page.evaluate(code);page.evaluate("window.__shutterGenerateRoom=Reflect.construct(window.__GenerateRoom,[document.querySelector('#generate-room')]); document.querySelector('#generate-room details').open=true;")
+ page.evaluate("window.__shutterGenerateRoom.sync()")
+ page.locator('#generate-room > details.generate-room').evaluate('(d)=>d.open=true');page.wait_for_timeout(20)
  def check(name,expr):assert page.evaluate(expr),name;report['checks'].append(name)
  check('Faithful and Draft are defaults',"document.querySelector('#generate-quality').value==='balanced'&&document.querySelector('#generate-resolution').value==='480P'")
- page.locator('input[name="generate-intent"][value="new-angle"]').check();page.wait_for_timeout(10)
+ page.locator('input[name="generate-intent"][value="new-angle"]').check(force=True);page.wait_for_timeout(10)
  check('New Angle disables unqualified 1080P finish',"document.querySelector('#generate-resolution option[value=\"1080P\"]').disabled")
  page.fill('#generate-prompt','new adjacent angle');page.check('#generate-color');page.click('#generate-plan');page.wait_for_timeout(20)
  check('Plan is local and reveals still plus visual tail',"__fixture.calls.some(c=>c.url==='/api/media/productions/prod_demo/inserts'&&c.method==='POST')&&document.querySelectorAll('.generate-refs figure').length===2&&document.querySelector('#generate-lifecycle').textContent.includes('motion reference video')")

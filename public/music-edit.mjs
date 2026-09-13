@@ -35,7 +35,42 @@ export function placements(edit) {
 }
 export function clipAt(edit, frame) {
   if (!int(frame)) fail('timeline_frame');
+  const cover=(edit.coverage||[]).find(c=>c.at<=frame&&frame<c.at+c.frames);
+  if(cover)return {...cover,end:cover.at+cover.frames,layer:'coverage'};
   return placements(edit).find(c => c.at <= frame && frame < c.end) || null;
+}
+/** Coverage shares the main scene clock. It never changes the length of picture. */
+export function validateCoverage(edit) {
+  const covers=edit.coverage??[];
+  if(!Array.isArray(covers)||covers.length>250)fail('coverage_invalid');
+  const seen=new Set(edit.clips.map(c=>c.id)),end=totalFrames(edit);
+  let previousEnd=0;
+  for(const c of [...covers].sort((a,b)=>a.at-b.at)){
+    if(!c||!identity(c.id)||seen.has(c.id))fail('coverage_identity');
+    seen.add(c.id);
+    if(!int(c.at)||!int(c.frames,1)||c.at+c.frames>end)fail('coverage_range');
+    if(c.at<previousEnd)fail('coverage_overlap');
+    previousEnd=c.at+c.frames;
+  }
+  return covers;
+}
+/** Resolve only the visible intervals, retaining each source's original sampling clock. */
+export function pictureClips(edit) {
+  const main=placements(edit),covers=validateCoverage(edit),end=totalFrames(edit);
+  const boundaries=[...new Set([0,end,...main.flatMap(c=>[c.at,c.end]),...covers.flatMap(c=>[c.at,c.at+c.frames])])].sort((a,b)=>a-b);
+  const runs=[];
+  for(let i=0;i<boundaries.length-1;i++){
+    const at=boundaries[i],frames=boundaries[i+1]-at;
+    const source=covers.find(c=>c.at<=at&&at<c.at+c.frames)||main.find(c=>c.at<=at&&at<c.end);
+    if(!source||!frames)continue;
+    const previous=runs.at(-1);
+    if(previous&&previous.id===source.id&&previous.at+previous.frames===at){previous.frames+=frames;continue;}
+    const sampling=samplingFor(source,edit.fps),offset=at-source.at;
+    const image=source.sourceKind==='image';
+    const selectedSampling={origin:sampling.origin,offsetFrames:image?0:sampling.offsetFrames+offset};
+    runs.push({...source,at,frames,sourceStart:image?'0/1':advanceSource(selectedSampling.origin,selectedSampling.offsetFrames,edit.fps),sampling:selectedSampling,layer:covers.includes(source)?'coverage':'main'});
+  }
+  return runs;
 }
 export function normalizeMusic(value) {
   if (value === undefined || value === null) return null;
@@ -97,7 +132,8 @@ export function validateVisuals(edit, profiles) {
   const fps = asNumber(exact(edit.fps));
   if (fps < 1 || fps > 120 || totalFrames(edit) / fps > 14400) fail('media_edit_duration');
   const ids = new Set();
-  for (const c of edit.clips) {
+  const covers=validateCoverage(edit);
+  for (const c of [...edit.clips,...covers]) {
     if (!identity(c.id) || ids.has(c.id) || !int(c.frames, 1, 10000000) || !['contain','cover'].includes(c.fit)) fail('media_clip_invalid');
     ids.add(c.id); const p = profiles instanceof Map ? profiles.get(c.assetId) : Object.hasOwn(profiles || {}, c.assetId) ? profiles[c.assetId] : null;
     if (!p || !['image','video'].includes(p.kind)) fail('visual_media_required');
@@ -151,6 +187,11 @@ export function applyEdit(edit, command, profiles) {
       next.markers = next.markers.filter(m=>m.id!==op.markerId); break;
     }
     case 'music': next.music = normalizeMusic(op.music); break;
+    case 'coverage-add': next.coverage=[...(next.coverage||[]),structuredClone(op.coverage)];break;
+    case 'coverage-remove': {
+      if(!(next.coverage||[]).some(c=>c.id===op.coverageId))fail('coverage_not_found');
+      next.coverage=next.coverage.filter(c=>c.id!==op.coverageId);break;
+    }
     default: fail('edit_command_unsupported');
   }
   return validateVisuals(next, profiles);

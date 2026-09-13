@@ -57,10 +57,14 @@ test('stale record key and foreign-origin restore are rejected',async()=>{
  let r=await fetch(`${base}/api/media/assets/${asset.id}/restore?recordKey=old`,{method:'POST',body:bytes});assert.equal(r.status,409);
  r=await fetch(`${base}/api/media/assets/${asset.id}/restore?recordKey=${assetRecordKey(asset)}`,{method:'POST',headers:{origin:'https://elsewhere.invalid'},body:bytes});assert.equal(r.status,403);
 });
-test('file length mismatch and symlink produce controlled errors rather than byte leakage',async()=>{
- const file=studio.assetPath(asset.id);await fs.truncate(file,20);assert.equal((await fetch(url())).status,409);await fs.unlink(file);
- const outside=path.join(root,'outside.wav');await fs.writeFile(outside,bytes);await fs.symlink(outside,file);assert.equal((await fetch(url())).status,409);
- await fs.unlink(file);await fs.writeFile(file,bytes);
+test('file length mismatch produces a controlled error rather than byte leakage',async()=>{
+ const file=studio.assetPath(asset.id);try{await fs.truncate(file,20);assert.equal((await fetch(url())).status,409);}finally{await fs.writeFile(file,bytes);}
+});
+test('a symlink produces a controlled error rather than byte leakage',async t=>{
+ const file=studio.assetPath(asset.id),outside=path.join(root,'outside.wav');
+ await fs.writeFile(outside,bytes);await fs.unlink(file);
+ try{try{await fs.symlink(outside,file);}catch(e){if(e.code==='EPERM'){t.skip('File symlinks require an OS privilege unavailable on this host');return;}throw e;}assert.equal((await fetch(url())).status,409);}
+ finally{await fs.rm(file,{force:true});await fs.writeFile(file,bytes);}
 });
 test('client cancelling a range does not crash the server or poison following requests',async()=>{
  const abort=new AbortController(),response=await fetch(url(),{headers:{range:'bytes=0-'},signal:abort.signal});abort.abort();try{await response.arrayBuffer();}catch{}

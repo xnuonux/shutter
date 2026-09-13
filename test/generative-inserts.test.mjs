@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {planGenerativeInsert,readGenerativeInsert,listGenerativeInserts,discardGenerativeInsert,quoteGenerativeInsert,submitGenerativeInsert,reconcileGenerativeInsert} from '../src/generative-inserts.mjs';
-import {applyGeneratedInsert} from '../src/generative-insert-apply.mjs';
+// Isolated lifecycle contracts. Real media/store integration is exercised separately.
+import {register} from 'node:module';
+register('./helpers/generative-insert-loader.mjs',import.meta.url);
+const {planGenerativeInsert,readGenerativeInsert,listGenerativeInserts,discardGenerativeInsert,quoteGenerativeInsert,submitGenerativeInsert,reconcileGenerativeInsert}=await import('../src/generative-inserts.mjs');
+const {applyGeneratedInsert}=await import('../src/generative-insert-apply.mjs');
 class Studio{
  constructor(root){this.root=root;this.records=new Map();this.jobs=new Map();this.timelineRevision=7;this.production={id:'prod_demo',title:'Midnight',revision:3,shots:[],cast:[]};this.timeline={format:'shutter-media-edit-v1',fps:'24',width:1920,height:1080,clips:[{id:'a',assetId:'asset_a',sourceStart:'0/1',frames:48,fit:'cover'},{id:'b',assetId:'asset_b',sourceStart:'0/1',frames:72,fit:'contain'}],soundtrack:{assetId:'master',tailPolicy:'pad-silence'},markers:[{id:'chorus',frame:48,label:'Chorus',kind:'chorus'}],textLayer:{schema:'shutter-text-v1',captionDelivery:'sidecar',cues:[]}};this.plan={hash:'plan7',format:this.timeline.format,fps:'24/1',width:1920,height:1080,clips:[{...this.timeline.clips[0],at:0,sourceKind:'video',sampling:{origin:'0/1',offsetFrames:0}},{...this.timeline.clips[1],at:48,sourceKind:'video',sampling:{origin:'0/1',offsetFrames:0}}]};
   this.write('asset',{id:'asset_a',sha256:'a'.repeat(64),filename:'a'.repeat(64)+'.mp4',bytes:1,kind:'video',mime:'video/mp4',name:'A'});this.write('asset',{id:'asset_b',sha256:'b'.repeat(64),filename:'b'.repeat(64)+'.mp4',bytes:1,kind:'video',mime:'video/mp4',name:'B'});

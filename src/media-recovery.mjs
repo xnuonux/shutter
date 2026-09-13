@@ -79,6 +79,8 @@ export function mediaHealthScope(studio,projectId,baseRevision) {
   };
   if(!Array.isArray(edit.clips)||edit.clips.length>250)throw Error('media_edit_invalid');
   edit.clips.forEach((c,i)=>add(c.assetId,`picture ${i+1}`));
+  if(!Array.isArray(edit.coverage??[])||(edit.coverage||[]).length>250)throw Error('coverage_invalid');
+  (edit.coverage||[]).forEach((c,i)=>add(c.assetId,`coverage ${i+1}`));
   if(edit.soundtrack)add(edit.soundtrack.assetId,'master song');
   for(const lane of edit.soundStage?.tracks||[])for(const clip of lane.clips||[])add(clip.assetId,`sound: ${lane.name||lane.id}${lane.mute?' (muted)':''}`);
   // Check the same last-created proxy that the existing viewer selects, not an invented substitute.

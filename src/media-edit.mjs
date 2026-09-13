@@ -10,7 +10,7 @@ import crypto from 'node:crypto';
 import {compileSoundStage, renderSoundStage, deliveryAudioFile, checkSoundBudget} from './media-sound.mjs';
 import {soundIdentity, SOUND_POLICY} from '../public/sound-edit.mjs';
 import {writeBridgeZip} from './media-zip.mjs';
-import { normalizeMusic, normalizeMarkers, samplingFor } from '../public/music-edit.mjs';
+import { normalizeMusic, normalizeMarkers, samplingFor, validateCoverage, pictureClips } from '../public/music-edit.mjs';
 import { rational, rateText, rateValue, frameSamples, getMediaProfile, verifyMediaAsset, ensureMediaProfile, runMedia, decoderArgs, importMediaFile, fileDigest } from './media-io.mjs';
 
 export const MEDIA_EDIT_FORMAT = 'shutter-media-edit-v1';
@@ -33,7 +33,7 @@ export function compileMediaEdit(studio,projectId,edit) {
   const music=normalizeMusic(edit.music), markers=normalizeMarkers(edit.markers);
   const ids=new Set(), sources=new Map(), warnings=new Set(['SDR rough-cut renderer: no log-to-display, HDR, ICC or creative grading transform.', 'Camera audio is excluded. Only the selected master track plays, or silence when no track is selected.']);
   let frames=0;
-  const clips=edit.clips.map(c=>{
+  const compileClip=(c,at)=>{
     if(!c||typeof c.id!=='string'||!/^[a-zA-Z0-9_-]{1,100}$/.test(c.id)||ids.has(c.id))throw Error('media_clip_identity');
     ids.add(c.id);
     if(!Number.isSafeInteger(c.frames)||c.frames<1||c.frames>1e7)throw Error('media_clip_frames');
@@ -51,9 +51,10 @@ export function compileMediaEdit(studio,projectId,edit) {
     const sourceWidth=rotated?media.height:media.width,sourceHeight=rotated?media.width:media.height;
     const scale=c.fit==='contain'?Math.min(width/sourceWidth,height/sourceHeight):Math.max(width/sourceWidth,height/sourceHeight);
     if(scale>1.000001)warnings.add('One or more shots are conventionally resized upward; no AI detail reconstruction is performed.');
-    const clip={id:c.id,assetId:asset.id,sourceStart:rateText(start),frames:c.frames,at:frames,fit:c.fit,sourceKind:media.kind,scale,sampling:samplingFor(c,rateText(fps))};
-    frames+=c.frames;return clip;
-  });
+    return {id:c.id,assetId:asset.id,sourceStart:rateText(start),frames:c.frames,at,fit:c.fit,sourceKind:media.kind,scale,sampling:samplingFor(c,rateText(fps))};
+  };
+  const clips=edit.clips.map(c=>{const clip=compileClip(c,frames);frames+=c.frames;return clip;});
+  const coverage=validateCoverage(edit).map(c=>compileClip(c,c.at));
   if(frames/rateValue(fps)>4*3600)throw Error('media_edit_duration');
   let soundtrack=null;
   if(edit.soundtrack!==null&&edit.soundtrack!==undefined) {
@@ -75,7 +76,7 @@ export function compileMediaEdit(studio,projectId,edit) {
   if(soundStage)warnings.delete('Camera audio is excluded. Only the selected master track plays, or silence when no track is selected.');
   const plan={version:textLayer?7:soundStage?6:5,...(textLayer?{textLayer,textIssues}:{}),format:MEDIA_EDIT_FORMAT,projectId,title:production.title,fps:rateText(fps),width,height,frames,
     duration:frames/rateValue(fps),audioSamples,sampleRate:48000,
-    clips,soundtrack,music,markers,sources:[...sources.values()],takes:[],audioStreams:soundStage||soundtrack?1:0,
+    clips,...(coverage.length?{coverage,pictureClips:pictureClips({clips,coverage,fps:rateText(fps)})}:{}),soundtrack,music,markers,sources:[...sources.values()],takes:[],audioStreams:soundStage||soundtrack?1:0,
     ...(soundStage?{soundStage,soundIdentity:soundIdentity(edit)}:{}),
     colorPolicy:edit.colorPolicy,audioPolicy:edit.audioPolicy,cadencePolicy:edit.cadencePolicy,warnings:[...warnings]};
   return plan;
@@ -88,6 +89,7 @@ function rateXml(fps) {
 export function xmlEscape(v) { return String(v).replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[c])).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,''); }
 /** Conformed-source FCP7 XML. Import/relink must still be tested inside Resolve. */
 export function makeBridgeXml(plan,filenames) {
+  if(plan.pictureClips)plan={...plan,clips:plan.pictureClips};
   if(filenames.length!==plan.clips.length)throw Error('bridge_files');
   const rate=rateXml(plan.fps),audioName=deliveryAudioFile(plan);
   const video=plan.clips.map((c,i)=>`<clipitem id="clip-${i}"><name>${xmlEscape(filenames[i])}</name>${rate}<start>${c.at}</start><end>${c.at+c.frames}</end><in>0</in><out>${c.frames}</out><duration>${c.frames}</duration><file id="file-${i}"><name>${xmlEscape(filenames[i])}</name><pathurl>${xmlEscape(filenames[i])}</pathurl>${rate}<duration>${c.frames}</duration><media><video><samplecharacteristics><width>${plan.width}</width><height>${plan.height}</height><pixelaspectratio>square</pixelaspectratio>${rate}</samplecharacteristics></video></media></file></clipitem>`).join('');
@@ -95,6 +97,7 @@ export function makeBridgeXml(plan,filenames) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="5"><sequence id="shutter-cut"><name>${xmlEscape(plan.title)}</name><duration>${plan.frames}</duration>${rate}<timecode>${rate}<string>00:00:00:00</string><frame>0</frame><displayformat>NDF</displayformat></timecode><media><video><format><samplecharacteristics><width>${plan.width}</width><height>${plan.height}</height><pixelaspectratio>square</pixelaspectratio>${rate}</samplecharacteristics></format><track>${video}</track></video>${audio}</media>${(plan.markers||[]).filter(m=>m.frame<plan.frames).map(m=>`<marker><name>${xmlEscape(m.label)}</name><comment>${xmlEscape(m.kind)}</comment><in>${m.frame}</in><out>-1</out></marker>`).join('')}</sequence></xmeml>\n`;
 }
 export function makeBridgeOtio(plan, filenames) {
+  if(plan.pictureClips)plan={...plan,clips:plan.pictureClips};
   const audioName=deliveryAudioFile(plan);
   const fps=rateValue(rational(plan.fps)), time=(value,rate)=>({OTIO_SCHEMA:'RationalTime.1',value,rate});
   const range=(frames,rate)=>({OTIO_SCHEMA:'TimeRange.1',start_time:time(0,rate),duration:time(frames,rate)});
@@ -136,8 +139,9 @@ export async function renderMediaEdit(studio,projectId,{baseRevision,acknowledge
   const folder=await fsp.mkdtemp(path.join(base,'cut-')), files=[], mediaFiles=[];
   let completed=false;
   try {
-    for(let i=0;i<plan.clips.length;i++) {
-      const c=plan.clips[i],p=getMediaProfile(studio,c.assetId),name=`shot-${String(i+1).padStart(4,'0')}.mp4`,target=path.join(folder,name);
+    const visible=plan.pictureClips||plan.clips;
+    for(let i=0;i<visible.length;i++) {
+      const c=visible[i],p=getMediaProfile(studio,c.assetId),name=`shot-${String(i+1).padStart(4,'0')}.mp4`,target=path.join(folder,name);
       const filters=mediaPictureFilters(plan,c,p);
       await runMedia('ffmpeg',['-v','error','-nostdin','-threads','2',...decoderArgs,
         ...(p.kind==='image'?['-loop','1','-framerate',plan.fps]:[]),'-i',studio.assetPath(c.assetId),'-map',`0:${p.videoStream}`,
@@ -202,7 +206,7 @@ export async function renderMediaTextFrame(studio,projectId,{baseRevision,frame,
   if(!Number.isSafeInteger(frame)||frame<0||frame>=plan.frames)throw Error('text_preview_frame');
   if(!acknowledgeUnmanagedColor)throw Error('reference_color_review_required');
   await preflightText(plan);
-  const c=plan.clips.find(c=>frame>=c.at&&frame<c.at+c.frames),p=getMediaProfile(studio,c.assetId);
+  const c=(plan.pictureClips||plan.clips).find(c=>frame>=c.at&&frame<c.at+c.frames),p=getMediaProfile(studio,c.assetId);
   await verifyMediaAsset(studio,c.assetId);
   const base=path.join(studio.root,'text-previews');await fsp.mkdir(base,{recursive:true});
   const folder=await fsp.mkdtemp(path.join(base,'frame-'));
