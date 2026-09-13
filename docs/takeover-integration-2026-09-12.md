@@ -47,6 +47,12 @@ Browser reproduction: set `SHUTTER_TEST_CHROMIUM`, `SHUTTER_REVIEW_URL`, `SHUTTE
 
 Durable task artifacts are at `C:/Users/Dom/Documents/Codex/2026-09-09/codex-threads-019fa76e-328b-7af3-ada3/outputs/shutter/takeover-integration/`: receipts, logs, desktop/timeline/mobile captures and the actual review MP4. Raw test and disposable-server data stay in the preserved integration worktree.
 
+## Canonical local integration
+
+The canonical checkout was fast-forwarded to the verified integration and documentation at `80e5622`. A read-only browser check opened the original rain production in its original timeline, then the new Studio with real local media tools; all three checks passed with no uncaught exceptions. The database record/request digest is identical before integration and after startup plus browser inspection: `ee42dee977d7c5bf7a46cadcdc4d96a63acdb3dae0cb5db8e42d7a6287823ddf` (78 records, 19 requests). No creative record, saved timeline, render request or asset record was changed.
+
+Canonical server PID at this checkpoint: 33084 on localhost4677; integration-review server PID 30172 on localhost4688. These are checkpoint observations, not permanent process identifiers. The canonical branch is locally integrated; GitHub draft PRs and remote branches were not changed.
+
 ## Budget and next product work
 
 **Takeover spending: $0. No paid generation, live quote or credential retrieval was performed.** The old local $4.72154 figure is stale. The newer H3 validation document records $2.26172 of study spending; neither number is a current fal account balance. Reconcile the actual account and persisted receipts before any further paid operation. The future Eternities commercial's $10 remains separate and unfunded until Dom confirms it is available.
