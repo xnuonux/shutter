@@ -27,6 +27,12 @@ Browser fixtures wait for the document and specific application readiness states
 
 Code and canonical integration are local. Remote branches and the nine draft PRs were not changed. Original canonical production data is not migrated or replaced. This pass used no paid provider calls and spent **$0**.
 
+## Local integration receipt
+
+Workspace code is committed at `b38e5f7`; the canonical checkout was fast-forwarded with its checkpoint at `6429410`. The canonical browser check passed three checks: actual workspace/module loading, production dialog, and the original rain scene editor, with no uncaught exceptions. Original journal preservation was rechecked after startup and browsing: all 78 records and 19 request entries retain the exact digest `ee42dee977d7c5bf7a46cadcdc4d96a63acdb3dae0cb5db8e42d7a6287823ddf`.
+
+Canonical server PID at this checkpoint is 38612 on localhost4677; the retained review server is PID24972 on localhost4688. Treat PIDs as observations and verify ownership before restarting. Canonical source is clean; generated verification files remain in the retained worktree.
+
 ## Resume
 
 Canonical source: `C:/dev/shutter`. Retained integration worktree: `C:/dev/.worktrees/shutter-integration-20260912`, branch `codex/shutter-integration-20260912`.

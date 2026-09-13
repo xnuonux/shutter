@@ -4,6 +4,8 @@ September 12, 2026. The focused studio workspace is now implemented and verified
 
 ## Current source and working proof
 
+The focused workspace implementation is committed at `b38e5f7` and integrated locally with its handoff. The canonical browser check passed and the original journal still matches its earlier 78-record / 19-request digest. See the workspace result for current process observations.
+
 The cumulative source is `astra/generative-insert-planner-20260912` at `be745b1`. The local integration branch is `codex/shutter-integration-20260912` in `C:/dev/.worktrees/shutter-integration-20260912`; code commit `868bf91` connects same-scene-time coverage to the new asset-backed Studio. The later approved VISION was merged at `b85bd3e`. The verified result is integrated into the canonical `C:/dev/shutter` checkout locally. Remote draft PRs remain unmerged.
 
 Studio at `/media-studio` now supports imported/generated material, picture editing, a mastered song, sound lanes, text, recovery, authored Production Memory, Take Stacks and governed Generative Inserts. Coverage replaces an interval on the same scene clock; the main view returns at elapsed source time. Preview, export and generation boundary references use that visible edit. The original Direct/Canvas/Moment and main/coverage productions remain available.
