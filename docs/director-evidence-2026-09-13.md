@@ -19,7 +19,11 @@ The focused tests exercise the real parent HTTP server, journal, source decoder,
 
 Failure tests cover stale revisions and hashes, changed intent during decoding, cancellation, altered source bytes, damaged thumbnail caches, foreign project frame access and record identity conflicts. MCP tests reject changed manifest bindings, invalid local routes, redirects, oversized image streams and incorrect image hashes. Manifest-only mode does not fetch image bytes. The real MCP round trip receives six image blocks and leaves the edit unchanged.
 
-Final integration counts, runtime and preservation receipt are recorded in the current checkpoint. Browser evidence is under `work/director-evidence/` in the retained worktree and copied into the task's dated evidence folder when integrated.
+Final suite: **516 tests, 514 passed, zero failed, two existing Windows symlink skips**. Ten focused evidence cases are included. The real evidence browser journey passed **13 checks**; the existing Director journey passed **14 checks**; canonical read-only browser verification passed **three checks**. Independent review is resolved. Desktop and mobile screenshots were visually inspected with the comparison pictures in view. A delayed preview test proves changed intent prevents the dependent evidence request.
+
+Code **`3feb51a`** is integrated locally into `C:/dev/shutter`. Canonical localhost4677 was PID29112 at verification. Its new evidence route and shared action module were checked live. The canonical journal remains exactly **78 records and 19 request entries**, ordered raw-SQL `{rows,requests}` SHA-256 `7d9b4326b5dd79bf02451228aecda069af83cf9227b5a326728d34da43013663`. No remote merge or deployment occurred.
+
+Browser evidence is under `work/director-evidence/` in the retained worktree and copied to task `01a087ae-15fc-7e43-8eb2-126e7883d103`, `outputs/shutter/director-evidence-2026-09-13/`. It includes desktop/mobile and return pictures, browser receipt, full suite output and canonical preservation checks. The disposable review production is `prod_e7b53477-2288-4906-8bfe-5e36b52af0d5` on localhost4688. The saved proposal is unaccepted; its 96-frame main cut remains unchanged.
 
 ## Boundaries and next work
 
