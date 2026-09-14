@@ -13,7 +13,7 @@ with sync_playwright() as p:
     page = browser.new_page(viewport={'width': 1440, 'height': 1000})
     page.set_default_timeout(15000)
     page.on('pageerror', lambda e: report['errors'].append(str(e)))
-    page.on('request', lambda r: report['requests'].append({'method': r.method, 'url': r.url}))
+    page.on('request', lambda r: report['requests'].append({'method': r.method, 'url': r.url, 'body':r.post_data_json if r.method=='POST' and '/actions/' in r.url else None}))
     def check(name, value):
         assert value, name
         report['checks'].append(name)
@@ -60,6 +60,10 @@ with sync_playwright() as p:
         check('entry and return use scene frames 36 and 59', 'scene 36' in text and 'scene 59' in text)
         check('evidence keeps the timeline unchanged', req(f'/api/media/productions/{pid}/timeline')==before)
         check('saved intent and continuity remain available', page.locator('.direction-evidence-details').text_content().find('Keep the subject and environment readable.')>=0)
+        sent = [r['body'] for r in report['requests'] if r['method']=='POST' and r['url'].endswith(('/actions/preview','/actions/evidence'))]
+        direction = req(f'/api/media/productions/{pid}/direction/opening')
+        binding = {'proposalId':direction['proposal']['id'],'momentId':'angle_'+pid}
+        check('browser preview and comparison preserve the exact selected proposal binding', len(sent)==2 and all(r['proposal']==binding for r in sent))
         check('pictures retain their full source framing', page.locator('.direction-evidence-grid img').evaluate_all('(xs)=>xs.every(x=>Math.abs(x.width/x.height-x.naturalWidth/x.naturalHeight)<0.02)'))
         page.locator('.direction-evidence-group').first.scroll_into_view_if_needed()
         page.screenshot(path=str(OUT/'boundary-comparison.png'))

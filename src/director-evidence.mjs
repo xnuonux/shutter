@@ -2,7 +2,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import {ACTION_VERSION,validateSchema} from '../public/action-contract.mjs';
+import {ACTION_VERSION,PROPOSAL_SELECTION_SCHEMA,validateSchema} from '../public/action-contract.mjs';
 import {samplingFor,advanceSource} from '../public/music-edit.mjs';
 import {previewActions,sceneIntent} from './director-actions.mjs';
 import {fingerprint} from './store.mjs';
@@ -13,6 +13,7 @@ import {inspectProcess} from './media-inspect.mjs';
 const schema='shutter-cutaway-evidence-v1',maxBytes=256*1024;
 const inputSchema={type:'object',additionalProperties:false,required:['version','baseRevision','commands','previewHash','coverageId'],properties:{
   version:{const:ACTION_VERSION},baseRevision:{type:'integer',minimum:0},commands:{type:'array',minItems:1,maxItems:32,items:{type:'object'}},
+  proposal:PROPOSAL_SELECTION_SCHEMA,
   previewHash:{type:'string',pattern:'^[a-f0-9]{64}$'},coverageId:{type:'string',minLength:1,maxLength:100,pattern:'^[A-Za-z0-9_-]+$'}
 }};
 const at=(clips,frame)=>clips.find(c=>c.at<=frame&&frame<c.at+c.frames);
@@ -25,7 +26,7 @@ function selection(clip,sceneFrame,fps,role){
     clip:{...clip,sourceStart,frames:1,sampling:{origin:clock.origin,offsetFrames}}};
 }
 function evidencePlan(studio,projectId,input){
-  const preview=previewActions(studio,projectId,{version:input.version,baseRevision:input.baseRevision,commands:input.commands});
+  const preview=previewActions(studio,projectId,{version:input.version,baseRevision:input.baseRevision,commands:input.commands,...(input.proposal?{proposal:input.proposal}:{})});
   if(preview.previewHash!==input.previewHash)throw Error('action_preview_conflict');
   const plan=studio.timelinePlan(projectId,preview.result.timeline),coverage=plan.coverage?.find(c=>c.id===input.coverageId);
   if(!coverage)throw Error('evidence_coverage_missing');
@@ -37,7 +38,7 @@ function evidencePlan(studio,projectId,input){
   if(end<plan.frames)add('return-after',end,at(visible,end));
   const intent=sceneIntent(studio,projectId,plan.clips.filter(c=>c.at<=end&&c.at+c.frames>Math.max(0,start-1)).map(c=>c.id));
   const id='evidence_'+fingerprint({schema,projectId,previewHash:preview.previewHash,coverageId:coverage.id,frames,intent});
-  return {id,plan,intent,frames,interval:{at:start,end}};
+  return {id,plan,intent,frames,interval:{at:start,end},binding:preview.proposal?{proposal:preview.proposal,proposalContext:preview.proposalContext}:{}};
 }
 function checkIdentity(studio,id){const row=studio.db.prepare('SELECT kind FROM records WHERE id=?').get(id);if(row&&row.kind!=='director-evidence')throw Error('evidence_identity_conflict');}
 function publicManifest(record,cached){const {folder,...value}=record;return {...value,cached};}
@@ -87,7 +88,7 @@ export async function inspectCutaway(studio,projectId,input,{signal}={}){
     }
     await verify();fresh();
     const result=studio.write('director-evidence',{schema,id,projectId,baseRevision:input.baseRevision,previewHash:input.previewHash,coverageId:input.coverageId,
-      interval,fps:plan.fps,intent,frames:pictures,folder:path.basename(folder),notes:[
+      interval,fps:plan.fps,intent,...proposed.binding,frames:pictures,folder:path.basename(folder),notes:[
         'Pictures use the proposed edit’s source sampling, framing and scene clock. Source times are exact seconds; scene frames start at zero.',
         'Local source pictures only. Text overlays and sound are excluded. These are unmanaged review thumbnails, not calibrated color or generation references.',
         'Saved intent identifies its artist or director authorship. Matching time positions does not prove matching action, identity or continuity.'

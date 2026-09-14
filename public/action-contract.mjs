@@ -8,6 +8,7 @@ const assetId = {type:'string', pattern:'^asset_[a-f0-9]{64}$'};
 const fit = {type:'string', enum:['contain','cover']};
 
 const obj = (properties, required=[]) => ({type:'object',properties,required,additionalProperties:false});
+export const PROPOSAL_SELECTION_SCHEMA = obj({proposalId:id,momentId:id},['proposalId','momentId']);
 const cue = obj({id,kind:{type:'string',enum:['caption','title','lower-third']},startFrame:frames,endFrame:positiveFrames,text:{type:'string',minLength:1,maxLength:480}},['id','kind','startFrame','endFrame','text']);
 const marker = obj({id,frame:frames,label:{type:'string',minLength:1,maxLength:160},kind:{type:'string',enum:['cue','verse','chorus','hit','note']}},['id','frame','label','kind']);
 const music = obj({schema:{const:'shutter-music-map-v1'},bpm:time,beatsPerBar:{type:'integer',minimum:1,maximum:12},beatUnit:{type:'integer',enum:[2,4,8,16]},offsetFrames:frames},['schema','bpm','beatsPerBar','beatUnit','offsetFrames']);

@@ -158,7 +158,7 @@ export class DirectionRoom {
     const token=++this.token, project=this.project, target=this.target, proposal=this.proposal, candidate=this.candidate, revision=this.getRecord()?.revision, command=candidate.command;
     this.evidenceLoading=true;this.evidence=null;this.renderEvidence();
     try{
-      const body={version:ACTION_VERSION,baseRevision:revision,commands:[command]};
+      const body={version:ACTION_VERSION,baseRevision:revision,commands:[command],proposal:{proposalId:proposal.id,momentId:candidate.momentId}};
       const preview=await this.api(`/api/media/productions/${this.project}/actions/preview`,{method:'POST',body:JSON.stringify(body)});
       const current=()=>token===this.token&&project===this.getProject()&&project===this.project&&target===this.target&&proposal===this.proposal&&candidate===this.candidate&&revision===this.getRecord()?.revision&&!this.isDirty()&&!this.pending;
       if(!current())return;

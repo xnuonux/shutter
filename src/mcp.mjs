@@ -4,7 +4,7 @@
  */
 import { createInterface } from "node:readline";
 import { createHash } from "node:crypto";
-import {ACTION_VERSION,validateSchema} from '../public/action-contract.mjs';
+import {ACTION_VERSION,PROPOSAL_SELECTION_SCHEMA,validateSchema} from '../public/action-contract.mjs';
 import {directorTools,invokeDirectorTool} from './director-tools.mjs';
 const base = process.env.SHUTTER_URL || "http://127.0.0.1:4677";
 const address = new URL(base);
@@ -21,14 +21,16 @@ const object = (properties, required = []) => ({
   additionalProperties: false,
 });
 const actionInput={projectId:id,version:{const:ACTION_VERSION},baseRevision:{type:'integer',minimum:0},commands:{type:'array',minItems:1,maxItems:32,items:{type:'object'}}};
+const actionRequired=Object.keys(actionInput);
+actionInput.proposal=PROPOSAL_SELECTION_SCHEMA;
 const definitions = [
   ...directorTools,
   ['shutter_action_catalog','Discover Studio editing actions and effects. Omit types for compact summaries; supply action types for exact input schemas and examples. Read this before planning edits. No generation or spending.',object({types:{type:'array',maxItems:31,items:id}}),true],
   ['shutter_studio_context','Read Studio productions and a bounded page of local source metadata. With projectId, return the saved edit, exact scene/source ranges, revision, warnings and undo/redo availability. No media processing or provider calls.',object({projectId:id,assetOffset:{type:'integer',minimum:0},assetLimit:{type:'integer',minimum:1,maximum:100}}),true],
-  ['shutter_preview_actions','Preview 1-32 ordered Studio actions against the observed revision without saving. Returns exact resulting timeline, visible source intervals, changed fields and previewHash. Discover command schemas first. Undo or redo must be standalone.',object(actionInput,Object.keys(actionInput)),true],
-  ['shutter_apply_actions','Apply the exact previewed Studio batch as one reversible edit. Requires its unchanged version, revision, commands and previewHash plus a stable requestKey. Retry identical input with the same key after an uncertain response; changed input conflicts. Never claims creative continuity approval.',object({...actionInput,previewHash:{type:'string',pattern:'^[a-f0-9]{64}$'},requestKey:id},[...Object.keys(actionInput),'previewHash','requestKey']),false],
+  ['shutter_preview_actions','Preview 1-32 ordered Studio actions against the observed revision without saving. For a chosen shot proposal, pass proposal={proposalId,momentId} and exactly its one candidate command; this binds source notes and direction. Returns resulting timeline, previewHash and captured proposalContext. Undo or redo must be standalone without a proposal.',object(actionInput,actionRequired),true],
+  ['shutter_apply_actions','Apply the exact previewed Studio batch as one reversible edit. Preserve version, revision, commands, optional proposal and previewHash; add a stable requestKey. Bound proposal context is rechecked atomically. Retry identical input with the same key after an uncertain response; changed input conflicts. Never claims creative continuity approval.',object({...actionInput,previewHash:{type:'string',pattern:'^[a-f0-9]{64}$'},requestKey:id},[...actionRequired,'previewHash','requestKey']),false],
   ['shutter_action_receipt','Read the persisted outcome for a Studio action requestKey. revision is the original applied revision; currentRevision may be later. A missing receipt is not evidence of success.',object({projectId:id,requestKey:id},['projectId','requestKey']),true],
-  ['shutter_inspect_cutaway','Inspect a previewed cutaway with up to six local source pictures and saved artist intent. Compares entry, return and main/alternate views at equal scene time. Returns JPEG images by default; set includeImages=false for metadata only. Local extraction caches evidence without editing, paid generation or continuity approval.',object({...actionInput,previewHash:{type:'string',pattern:'^[a-f0-9]{64}$'},coverageId:id,includeImages:{type:'boolean'}},[...Object.keys(actionInput),'previewHash','coverageId']),false],
+  ['shutter_inspect_cutaway','Inspect a previewed cutaway with up to six local source pictures and saved intent. Preserve the preview input including optional proposal. Compares entry, return and main/alternate views at equal scene time. Returns JPEG images by default; includeImages=false for metadata only. Caches evidence without editing, spending or continuity approval.',object({...actionInput,previewHash:{type:'string',pattern:'^[a-f0-9]{64}$'},coverageId:id,includeImages:{type:'boolean'}},[...actionRequired,'previewHash','coverageId']),false],
   ['shutter_get_timeline','Read the same saved scene timeline and exact source ranges as the visual editor. Coverage replaces picture without adding time; audio follows main footage.',object({projectId:id},['projectId']),true],
   ['shutter_save_timeline','Save a reversible edit to the observed timeline revision. Use integer source frames, stable clip IDs and ready takes. Does not generate video or spend credits. Read the timeline again on conflict.',object({projectId:id,baseRevision:{type:'integer',minimum:0},timeline:{type:'object'}},['projectId','baseRevision','timeline']),false],
   [
@@ -120,6 +122,7 @@ function validate(schema, value) {
   return validateSchema(schema,value);
 }
 function recovery(code){
+  if(code==='proposal_command_conflict')return 'Use exactly one unchanged command from the selected proposal candidate, or preview an independent edit without a proposal binding.';
   if(code==='direction_revision_conflict')return 'Read shutter_get_direction and rebuild the proposal from its current directionRevision and timelineRevision.';
   if(code==='memory_revision_conflict')return 'Search shutter_search_moments for the current source note and rebuild the proposal before using it.';
   if(['revision_conflict','action_preview_conflict','evidence_intent_conflict'].includes(code))return 'Read shutter_studio_context again and preview against the current revision before applying.';
@@ -143,6 +146,7 @@ async function invoke(name, args) {
     const {projectId,includeImages=true,...input}=args;
     const manifest=await api('/api/media/productions/'+encodeURIComponent(projectId)+'/actions/evidence',input);
     if(!manifest||manifest.schema!=='shutter-cutaway-evidence-v1'||manifest.projectId!==projectId||manifest.baseRevision!==args.baseRevision||manifest.previewHash!==args.previewHash||manifest.coverageId!==args.coverageId||typeof manifest.id!=='string'||!/^evidence_[a-f0-9]{64}$/.test(manifest.id)||!Array.isArray(manifest.frames)||manifest.frames.length<4||manifest.frames.length>6)throw new Error('evidence_manifest_invalid');
+    if(args.proposal?(manifest.proposal?.proposalId!==args.proposal.proposalId||manifest.proposal?.momentId!==args.proposal.momentId||manifest.proposalContext?.moment?.id!==args.proposal.momentId):manifest.proposal!==undefined)throw new Error('evidence_manifest_invalid');
     const roles=new Set();
     for(const [position,frame] of manifest.frames.entries()){
       if(!frame||frame.index!==position||typeof frame.url!=='string'||frame.url!==`/api/media/productions/${encodeURIComponent(projectId)}/actions/evidence/${manifest.id}/frames/${frame.index}`||typeof frame.sha256!=='string'||!/^[a-f0-9]{64}$/.test(frame.sha256)||!['entry-before','entry-main','entry-alternate','return-alternate','return-main','return-after'].includes(frame.role)||roles.has(frame.role)||!Number.isSafeInteger(frame.sceneFrame)||frame.sceneFrame<0||typeof frame.sourceStart!=='string')throw new Error('evidence_manifest_invalid');

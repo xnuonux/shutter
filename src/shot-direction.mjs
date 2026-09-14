@@ -80,6 +80,24 @@ export function proposeShots(studio,projectId,clipId,{baseRevision,directionRevi
     studio.write('shot-direction',{...direction,latestProposalId:id});return proposal;
   });
 }
+/** Resolve the captured creative context, including content when a deleted id is reused. */
+export function resolveProposalSelection(studio,projectId,{proposalId,momentId},baseRevision){
+  const proposal=studio.read(memoryId(proposalId),'shot-proposal');
+  if(proposal.projectId!==projectId)throw Error('not_found');
+  const candidate=proposal.candidates.find(c=>c.momentId===momentId);if(!candidate)throw Error('direction_candidate_not_found');
+  if(baseRevision!==proposal.baseRevision)throw Error('revision_conflict');
+  const {record,shot}=selected(studio,projectId,proposal.clipId,baseRevision),direction=currentDirection(studio,projectId,proposal.clipId);
+  if(!direction||direction.revision!==proposal.directionRevision||fingerprint(direction.brief)!==fingerprint(proposal.brief)||(direction.evidence||'artist-authored')!==(proposal.directionEvidence||'artist-authored'))throw Error('direction_revision_conflict');
+  let moment;try{moment=readMoment(studio,projectId,momentId);}catch(e){if(e.message==='not_found')throw Error('memory_revision_conflict');throw e;}
+  const snapshot=m=>({id:m.id,revision:m.revision,assetId:m.assetId,assetName:m.assetName,mediaKind:m.mediaKind,startUs:m.startUs,endUs:m.endUs,sourceSha256:m.sourceSha256,label:m.label,notes:m.notes,tags:m.tags,evidence:m.evidence||'artist-authored'});
+  const captured=snapshot({...candidate,id:candidate.momentId,revision:candidate.momentRevision,startUs:candidate.markedStartUs});
+  if(fingerprint(snapshot(moment))!==fingerprint(captured))throw Error('memory_revision_conflict');
+  if(studio.read(candidate.assetId,'asset').sha256!==candidate.sourceSha256)throw Error('asset_integrity');
+  const interval=coverageInterval(studio,record.timeline,shot,proposal.brief.coverage);
+  const fit=rangeFitsTake(candidate,interval||shot,record.timeline.fps,getMediaProfile(studio,candidate.assetId));if(!fit.fits)throw Error(fit.reason);
+  const context={clipId:proposal.clipId,directionRevision:direction.revision,brief:direction.brief,directionEvidence:direction.evidence||'artist-authored',moment:captured};
+  return {proposal,candidate,record,shot,context};
+}
 export async function acceptShotProposal(studio,projectId,clipId,{proposalId,momentId,reviewed,checkedContinuity,aligned}={}){
   const proposal=studio.read(memoryId(proposalId),'shot-proposal');
   if(proposal.projectId!==projectId||proposal.clipId!==clipId)throw Error('not_found');
@@ -89,12 +107,7 @@ export async function acceptShotProposal(studio,projectId,clipId,{proposalId,mom
   const coverage=proposal.operation==='add-camera-coverage';
   if(coverage&&aligned!==true)throw Error('direction_source_alignment_required');
   const check=()=>{
-    const {record,shot}=selected(studio,projectId,clipId,proposal.baseRevision);
-    if(currentDirection(studio,projectId,clipId)?.revision!==proposal.directionRevision)throw Error('direction_revision_conflict');
-    let moment;try{moment=readMoment(studio,projectId,momentId);}catch(e){if(e.message==='not_found')throw Error('memory_revision_conflict');throw e;}
-    if(moment.revision!==candidate.momentRevision||moment.sourceSha256!==candidate.sourceSha256)throw Error('memory_revision_conflict');
-    const interval=coverageInterval(studio,record.timeline,shot,proposal.brief.coverage);
-    const fit=rangeFitsTake(candidate,interval||shot,record.timeline.fps,getMediaProfile(studio,candidate.assetId));if(!fit.fits)throw Error(fit.reason);
+    const {record,shot}=resolveProposalSelection(studio,projectId,{proposalId,momentId},proposal.baseRevision);
     if(!coverage&&sameSelection(candidate,shot,record.timeline.fps))throw Error('direction_already_selected');return record;
   };
   check();
@@ -105,5 +118,5 @@ export async function acceptShotProposal(studio,projectId,clipId,{proposalId,mom
   const record=check(); // Recheck direction, note and cut after asynchronous file verification.
   const ids=new Set([...record.timeline.clips,...record.timeline.coverage||[],candidate].map(c=>c.assetId));
   const profiles=new Map([...ids].map(id=>[id,getMediaProfile(studio,id)]));
-  return studio.saveTimeline(projectId,proposal.baseRevision,applyEdit(record.timeline,candidate.command,profiles));
+  return studio.saveTimeline(projectId,proposal.baseRevision,applyEdit(record.timeline,candidate.command,profiles),'save',null,check);
 }

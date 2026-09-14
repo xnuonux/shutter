@@ -11,7 +11,9 @@ import crypto from 'node:crypto';
 import {watch} from 'node:fs';
 import {runMedia} from '../src/media-io.mjs';
 import {Studio} from '../src/store.mjs';
-import {saveShotDirection} from '../src/shot-direction.mjs';
+import {saveShotDirection,proposeShots} from '../src/shot-direction.mjs';
+import {saveMoment,deleteMoment} from '../src/production-memory.mjs';
+import {previewActions} from '../src/director-actions.mjs';
 import {inspectCutaway} from '../src/director-evidence.mjs';
 
 let child,base,root,studio,original,alternate;
@@ -95,6 +97,23 @@ test('cancellation leaves no partial evidence and changed original bytes cannot 
   try{await fs.writeFile(file,Buffer.concat([bytes,Buffer.from('tampered')]));assert.equal((await inspect(f)).status,400);}
   finally{await fs.writeFile(file,bytes);}
   assert.equal((await json(inspect(f))).id,e.id);
+});
+
+test('a bound source note deleted during decoding rejects the result and cannot reuse stale cached evidence',async()=>{
+  const f=await fixture(),moment=await saveMoment(studio,f.id,{id:'marked_'+f.id,assetId:alternate.id,startUs:1000000,endUs:4000000,label:'Turn',notes:'The orb remains in hand.'});
+  saveShotDirection(studio,f.id,'first',{baseRevision:1,brief:{goal:'Keep the turn.',continuity:[],query:'',coverage:{at:36,end:60,sourceOffsetUs:500000}}});
+  const proposal=proposeShots(studio,f.id,'first',{baseRevision:2,directionRevision:2}),input={version,baseRevision:2,commands:[proposal.candidates[0].command],proposal:{proposalId:proposal.id,momentId:moment.id}};
+  const preview=previewActions(studio,f.id,input);f.input={...input,previewHash:preview.previewHash,coverageId:input.commands[0].coverage.id};
+  const first=await json(inspect(f));assert.equal((await json(inspect(f))).cached,true);
+  // Force a real re-extraction, then change the note while the decoder is in flight.
+  const cached=studio.read(first.id,'director-evidence');await fs.writeFile(path.join(studio.root,'director-evidence',cached.folder,'frame-0.jpg'),'broken cache');
+  const cache=path.join(studio.root,'director-evidence'),folders=await fs.readdir(cache),records=studio.list('director-evidence').length;let changed=false;
+  const watcher=watch(cache,(_event,name)=>{if(!changed&&String(name).startsWith('cutaway-')&&!folders.includes(String(name))){changed=true;deleteMoment(studio,f.id,moment.id,1);}});
+  try{
+    assert.equal((await json(inspect(f),409)).error,'memory_revision_conflict');assert.equal(changed,true);
+    assert.equal(studio.list('director-evidence').length,records);assert.deepEqual(await fs.readdir(cache),folders);assert.deepEqual(studio.getTimeline(f.id),f.record);
+    assert.equal((await json(inspect(f),409)).error,'memory_revision_conflict');
+  }finally{watcher.close();}
 });
 test('still coverage always samples source zero while its scene clock advances',async()=>{
   const file=path.join(root,'still.png');await runMedia('ffmpeg',['-v','error','-f','lavfi','-i','color=c=gold:s=160x90','-frames:v','1','-threads','1',file]);

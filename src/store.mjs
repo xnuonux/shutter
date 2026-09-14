@@ -376,10 +376,12 @@ export class Studio {
     }
     return {...record,plan:this.timelinePlan(id,record.timeline)};
   }
-  saveTimeline(id,baseRevision,timeline,action='save',actionReceipt=null) {
+  saveTimeline(id,baseRevision,timeline,action='save',actionReceipt=null,beforeCommit=null) {
     return this.transaction(()=>{
       const current=this.getTimeline(id);
       if(current.revision!==baseRevision)throw Error('revision_conflict');
+      // Caller-owned context checks share the write lock and rollback with the edit/receipt.
+      if(beforeCommit)beforeCommit();
       let next=clone(timeline||current.timeline),past=current.past,future=current.future;
       if(action==='undo'){
         if(!past.length)throw Error('timeline_no_undo');next=past.at(-1);past=past.slice(0,-1);future=[current.timeline,...future];
