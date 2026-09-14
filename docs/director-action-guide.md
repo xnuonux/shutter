@@ -62,6 +62,22 @@ Shutter rechecks the preview, intent and source integrity before returning new e
 
 A boundary picture cannot establish motion continuity over an entire interval. Audition the scene to assess motion and sound. Evidence excludes titles and audio, and its unmanaged thumbnails are not calibrated color or generation references. The application does not score identity or auto-check the artist's acceptance boxes. A connected director must explain what it actually sees, distinguish uncertainty from evidence, and use the existing preview/apply workflow for an authorized edit.
 
+## Inspect source motion before describing it
+
+Call `shutter_inspect_source` with an existing video `assetId`, integer source `startUs` and `endUs`, and optional `frameCount` (2-12, default 8). Choose an interval between 0.125 and 15 seconds, inside the source duration. Discover the asset and duration through `shutter_studio_context` first. The tool creates a short silent local playback and returns chronological JPEG images directly to the client. `includeImages: false` returns only the manifest. No note, asset-library item, cut or generation job is created.
+
+```json
+{"assetId":"asset_<actual source hash>","startUs":1000000,"endUs":3000000,"frameCount":8}
+```
+
+The manifest is `shutter-source-inspection-v1`. Its `preview.url` is a local MP4 path with byte-range support for seeking. Resolve it against the configured Shutter URL to open playback in a browser; an MCP client receiving image blocks has inspected sampled images, not automatically watched that video. The clip is 640 × 360 with contained source framing at 24 fps. It omits source audio and any project sound/text/coverage because it inspects one source, not the assembled scene.
+
+`frames` are ordered first-to-last samples of that playback. Each has `previewFrame`, rational `previewTime`, rational `sourceTime`, image URL and byte hash. `sourceTime` is the nominal resampling clock used by Shutter's exporter, not an original decoded-frame timestamp. `preview.sourceStart`/`sourceEnd` identify the conformed interval; its duration is rounded down to full 24 fps frames, potentially omitting a tail shorter than one frame. `sampling.maxGapFrames` reports the largest gap between shown samples. Narrow the interval to inspect fast action. Do not describe an unseen intervening event as observed.
+
+The result is cached by source identity, profile, range and sampling options. Shutter verifies source bytes and cached images/playback before reuse; profile/source changes during processing reject the result. Decoder work has a 90-second cancellation/deadline signal, at most 12 JPEGs of 256 KiB each, and a 16 MiB playback limit. This uses installed FFmpeg, with no provider. Known HDR requires the existing color preparation workflow first. Unmanaged inspection media is not a delivery or generation reference.
+
+Artists can use the same operation in **Moments → Mark a useful source range → Inspect motion**. Playback and sample clicks inspect that interval without writing the note or changing the cut. Editing its bounds withdraws the old result. The existing **Scout this range** remains the separate coarse visual-change search over longer source intervals.
+
 ## Find sources and author direction
 
 Five additional MCP tools connect existing Production Memory and Director workflows to the editing vocabulary. The catalog's `relatedTools` points to them; MCP `tools/list` supplies their closed schemas. They operate on an existing local production and existing imported source assets. They never generate media, upload material or record artist continuity acceptance.
@@ -78,7 +94,7 @@ Revision names refer to different records. A moment save's `baseRevision` belong
 
 Moment `startUs`/`endUs` and coverage `sourceOffsetUs` are integer microseconds. A one-second offset is `1000000`. Coverage `at`/`end` are integer output frames, end exclusive. Ordinary edit `sourceStart` remains an exact seconds string. Shutter validates the source duration and the full compiled edit in addition to JSON shape.
 
-The practical sequence is: discover assets, inspect the footage, mark useful source ranges, search those notes, read/save direction, and request proposals. Choose a fitting candidate based on actual evidence and the user's intent. Pass its returned `command` unchanged as the only command to `shutter_preview_actions`, with `proposal: {proposalId: proposal.id, momentId: candidate.momentId}`. Preserve that binding in `shutter_inspect_cutaway` and `shutter_apply_actions`. Inspect the returned `proposalContext`, which captures the brief, direction revision/authorship and the marked source's range, content and revision. Explain the proposed choice and execute the authorized edit. Undo uses the existing action workflow without a proposal binding.
+The practical sequence is: discover assets, use `shutter_inspect_source` to inspect the relevant interval, mark useful source ranges, search those notes, read/save direction, and request proposals. Choose a fitting candidate based on actual evidence and the user's intent. Pass its returned `command` unchanged as the only command to `shutter_preview_actions`, with `proposal: {proposalId: proposal.id, momentId: candidate.momentId}`. Preserve that binding in `shutter_inspect_cutaway` and `shutter_apply_actions`. Inspect the returned `proposalContext`, which captures the brief, direction revision/authorship and the marked source's range, content and revision. Explain the proposed choice and execute the authorized edit. Undo uses the existing action workflow without a proposal binding.
 
 Search is lexical over names, tags, filenames and saved descriptions; it does not infer faces, motion or story. Only describe what was actually inspected or explicitly supplied by the user. The bridge labels its saved revisions `director-authored`; the editor's user-save path labels its revisions `artist-authored`. These labels identify the latest authoring path, not an authenticated identity, factual verification or endorsement. Existing artist notes are not rewritten or migrated.
 
@@ -104,7 +120,7 @@ A bound preview hash cannot be reused after stripping or changing its binding. E
 
 `direction_revision_conflict` and `memory_revision_conflict` require rereading the direction or source note and rebuilding the proposal. `proposal_command_conflict` means the bound command is not exactly the chosen candidate, or the batch includes other commands. Send the chosen single command or preview a deliberately independent edit without a binding.
 
-The 31-action surface covers reversible editing of existing Studio material; the five source/direction tools above are separate operations. Asset import, production creation, local source scouting, Take Stack review, color processing, local export and paid generation retain their existing app/API workflows. Legacy MCP shot and Blender-stage inspection tools remain separate. A live third-party director session has not been certified by the protocol tests.
+The 31-action surface covers reversible editing of existing Studio material. With source motion inspection there are twelve Studio/workflow tools, alongside legacy MCP shot and Blender-stage tools. Asset import, production creation, coarse source scouting, Take Stack review, color processing, local export and paid generation retain their existing app/API workflows. A live third-party director session has not been certified by the protocol tests.
 
 The bridge does not grant generation, spending, uploading, publication or hosted access authority. Do not turn a successful edit into a claim of artist continuity approval. Pixel can use these operations as its execution vocabulary; Pixel's planning and observation loop remains a separate implementation task.
 

@@ -1,4 +1,6 @@
 import {handleMemoryRequest} from './memory-api.mjs';
+import {inspectSourceRange,readSourceInspectionFile} from './source-inspection.mjs';
+import {byteRange} from './media-stream.mjs';
 import {inspectCutaway,readCutawayFrame} from './director-evidence.mjs';
 import {actionCatalog,directorContext,previewActions,applyActions,actionReceipt,commandProfiles} from './director-actions.mjs';
 import {applyTimelineCommand} from '../public/edit-actions.mjs';
@@ -38,6 +40,20 @@ export async function handleMediaRequest(studio,req,res,url) {
   if(await handleMemoryRequest(studio,req,res,url))return true;
   const parts=url.pathname.split('/').filter(Boolean);
   try {
+    if(req.method==='POST'&&parts.length===5&&parts[2]==='assets'&&parts[4]==='inspect'){
+      const input=await body(req),abort=new AbortController(),cancel=()=>{if(!res.writableEnded)abort.abort();};res.once('close',cancel);if(res.destroyed)abort.abort();
+      try{const result=await mediaExclusive(studio,()=>inspectSourceRange(studio,parts[3],input,{signal:abort.signal}));if(!res.destroyed)json(res,200,result);}
+      finally{res.removeListener('close',cancel);}return true;
+    }
+    if(['GET','HEAD'].includes(req.method)&&parts[2]==='inspections'&&((parts.length===5&&parts[4]==='preview')||(parts.length===6&&parts[4]==='frames'))){
+      if(parts[4]==='frames'&&!/^(?:[0-9]|1[01])$/.test(parts[5]))throw Error('not_found');
+      const preview=parts[4]==='preview',bytes=await readSourceInspectionFile(studio,parts[3],preview?'preview':Number(parts[5]));
+      const range=byteRange(preview&&req.method==='GET'&&!req.headers['if-range']?req.headers.range:undefined,bytes.length);
+      const headers={'content-type':preview?'video/mp4':'image/jpeg','cache-control':'no-store','x-content-type-options':'nosniff',...(preview?{'accept-ranges':'bytes'}:{})};
+      if(range.status===416){res.writeHead(416,{...headers,'content-range':`bytes */${bytes.length}`,'content-length':0});res.end();return true;}
+      res.writeHead(range.status,{...headers,'content-length':range.end-range.start+1,...(range.status===206?{'content-range':`bytes ${range.start}-${range.end}/${bytes.length}`}:{})});
+      res.end(req.method==='HEAD'?undefined:bytes.subarray(range.start,range.end+1));return true;
+    }
     if(req.method==='GET'&&url.pathname==='/api/media/actions'){
       json(res,200,actionCatalog(url.searchParams.has('types')?url.searchParams.get('types').split(','):[]));return true;
     }

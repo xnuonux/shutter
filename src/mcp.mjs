@@ -6,6 +6,8 @@ import { createInterface } from "node:readline";
 import { createHash } from "node:crypto";
 import {ACTION_VERSION,PROPOSAL_SELECTION_SCHEMA,validateSchema} from '../public/action-contract.mjs';
 import {directorTools,invokeDirectorTool} from './director-tools.mjs';
+import {SOURCE_INSPECTION_SCHEMA,SOURCE_INSPECTION_OPTIONS} from '../public/source-inspection-contract.mjs';
+import {advanceSource} from '../public/music-edit.mjs';
 const base = process.env.SHUTTER_URL || "http://127.0.0.1:4677";
 const address = new URL(base);
 if (
@@ -25,6 +27,7 @@ const actionRequired=Object.keys(actionInput);
 actionInput.proposal=PROPOSAL_SELECTION_SCHEMA;
 const definitions = [
   ...directorTools,
+  ['shutter_inspect_source','Inspect 0.125-15 seconds of existing video before describing its action. Times are integer source microseconds. Returns a silent local 24 fps playback URL and 2-12 chronological sampled images (default 8); includeImages=false returns metadata only. Source times are nominal resampling positions, not original PTS. Read sampling gaps; narrow the interval for fast action. Caches local evidence without changing notes, footage, cuts or spending credits.',object({assetId:{type:'string',pattern:'^asset_[a-f0-9]{64}$'},...SOURCE_INSPECTION_OPTIONS,includeImages:{type:'boolean'}},['assetId','startUs','endUs']),false],
   ['shutter_action_catalog','Discover Studio editing actions and effects. Omit types for compact summaries; supply action types for exact input schemas and examples. Read this before planning edits. No generation or spending.',object({types:{type:'array',maxItems:31,items:id}}),true],
   ['shutter_studio_context','Read Studio productions and a bounded page of local source metadata. With projectId, return the saved edit, exact scene/source ranges, revision, warnings and undo/redo availability. No media processing or provider calls.',object({projectId:id,assetOffset:{type:'integer',minimum:0},assetLimit:{type:'integer',minimum:1,maximum:100}}),true],
   ['shutter_preview_actions','Preview 1-32 ordered Studio actions against the observed revision without saving. For a chosen shot proposal, pass proposal={proposalId,momentId} and exactly its one candidate command; this binds source notes and direction. Returns resulting timeline, previewHash and captured proposalContext. Undo or redo must be standalone without a proposal.',object(actionInput,actionRequired),true],
@@ -102,7 +105,7 @@ const tools = definitions.map(
     annotations: {
       readOnlyHint,
       destructiveHint: false,
-      idempotentHint: readOnlyHint || ['shutter_prepare_shot','shutter_apply_actions','shutter_render_shot','shutter_inspect_cutaway'].includes(name),
+      idempotentHint: readOnlyHint || ['shutter_prepare_shot','shutter_apply_actions','shutter_render_shot','shutter_inspect_cutaway','shutter_inspect_source'].includes(name),
       openWorldHint: ['shutter_prepare_shot','shutter_render_shot'].includes(name),
     },
   }),
@@ -122,6 +125,7 @@ function validate(schema, value) {
   return validateSchema(schema,value);
 }
 function recovery(code){
+  if(code==='source_inspection_range')return 'Choose an existing video interval between 0.125 and 15 seconds, within its reported duration. Use integer source microseconds.';
   if(code==='proposal_command_conflict')return 'Use exactly one unchanged command from the selected proposal candidate, or preview an independent edit without a proposal binding.';
   if(code==='direction_revision_conflict')return 'Read shutter_get_direction and rebuild the proposal from its current directionRevision and timelineRevision.';
   if(code==='memory_revision_conflict')return 'Search shutter_search_moments for the current source note and rebuild the proposal before using it.';
@@ -130,11 +134,33 @@ function recovery(code){
   if(code==='not_found')return 'Discover current productions and source IDs. A missing receipt is not a successful edit.';
   return 'Read the relevant action schemas and current Studio context; correct the input before retrying.';
 }
+async function verifiedImage(url,sha256){
+  const response=await fetch(base+url,{redirect:'error',signal:AbortSignal.timeout(100000)});if(!response.ok)throw new Error('evidence_frame_unavailable');
+  if(!/^image\/jpeg$/i.test(response.headers.get('content-type')||''))throw new Error('evidence_frame_invalid');
+  const reader=response.body?.getReader();if(!reader)throw new Error('evidence_frame_invalid');let size=0;const chunks=[];
+  for(;;){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>256*1024){await reader.cancel();throw new Error('evidence_frame_too_large');}chunks.push(Buffer.from(part.value));}
+  const bytes=Buffer.concat(chunks);if(bytes.length<3||bytes[0]!==0xff||bytes[1]!==0xd8||bytes[2]!==0xff)throw new Error('evidence_frame_invalid');
+  if(createHash('sha256').update(bytes).digest('hex')!==sha256)throw new Error('evidence_frame_integrity');return bytes;
+}
 async function invoke(name, args) {
   const definition = tools.find((t) => t.name === name);
   if (!definition) throw new Error("Unknown tool.");
   validate(definition.inputSchema, args);
   if(directorTools.some(tool=>tool[0]===name))return invokeDirectorTool(name,args,api);
+  if(name==='shutter_inspect_source'){
+    const {assetId,includeImages=true,...input}=args,manifest=await api(`/api/media/assets/${assetId}/inspect`,input);
+    const frames=Math.floor((input.endUs-input.startUs)*24/1e6),count=Math.min(input.frameCount??8,frames);
+    if(!manifest||manifest.schema!==SOURCE_INSPECTION_SCHEMA||manifest.assetId!==assetId||manifest.sourceSha256!==assetId.slice(6)||!/^inspection_[a-f0-9]{64}$/.test(manifest.id)||manifest.options?.startUs!==input.startUs||manifest.options?.endUs!==input.endUs||manifest.options?.frameCount!==(input.frameCount??8)||!Array.isArray(manifest.frames)||manifest.frames.length!==count||frames<3||frames>360)throw Error('source_inspection_manifest_invalid');
+    const prefix=`/api/media/inspections/${manifest.id}`;
+    if(manifest.preview?.url!==prefix+'/preview'||manifest.preview.frames!==frames||manifest.preview.fps!=='24/1'||manifest.preview.audio!=='omitted'||!/^[a-f0-9]{64}$/.test(manifest.preview.sha256))throw Error('source_inspection_manifest_invalid');
+    for(const [index,frame] of manifest.frames.entries()){
+      const position=Math.floor(index*(frames-1)/(count-1));
+      if(frame.index!==index||frame.previewFrame!==position||frame.sourceTime!==advanceSource(`${input.startUs}/1000000`,position,'24/1')||frame.url!==`${prefix}/frames/${index}`||!/^[a-f0-9]{64}$/.test(frame.sha256))throw Error('source_inspection_manifest_invalid');
+    }
+    if(!includeImages)return manifest;
+    const images=[];for(const frame of manifest.frames){const bytes=await verifiedImage(frame.url,frame.sha256);images.push({type:'text',text:`Source sample ${frame.index}: nominal source ${frame.sourceTime} seconds, playback frame ${frame.previewFrame}. Intervening frames are omitted.`},{type:'image',data:bytes.toString('base64'),mimeType:'image/jpeg'});}
+    return {...manifest,__imageBlocks:images};
+  }
   if(name==='shutter_action_catalog')return api('/api/media/actions'+(args.types?.length?'?types='+encodeURIComponent(args.types.join(',')):''));
   if(name==='shutter_studio_context')return api('/api/media/action-context?'+new URLSearchParams(Object.entries(args).map(([key,value])=>[key,String(value)])));
   if(['shutter_preview_actions','shutter_apply_actions','shutter_action_receipt'].includes(name)){
@@ -155,12 +181,7 @@ async function invoke(name, args) {
     if(!includeImages)return manifest;
     const images=[];
     for(const frame of manifest.frames){
-      const response=await fetch(base+frame.url,{redirect:'error',signal:AbortSignal.timeout(100000)});if(!response.ok)throw new Error('evidence_frame_unavailable');
-      if(!/^image\/jpeg$/i.test(response.headers.get('content-type')||''))throw new Error('evidence_frame_invalid');
-      const reader=response.body?.getReader();if(!reader)throw new Error('evidence_frame_invalid');let size=0;const chunks=[];
-      for(;;){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>256*1024){await reader.cancel();throw new Error('evidence_frame_too_large');}chunks.push(Buffer.from(part.value));}
-      const bytes=Buffer.concat(chunks);if(bytes.length<3||bytes[0]!==0xff||bytes[1]!==0xd8||bytes[2]!==0xff)throw new Error('evidence_frame_invalid');
-      const sha256=createHash('sha256').update(bytes).digest('hex');if(sha256!==frame.sha256)throw new Error('evidence_frame_integrity');
+      const bytes=await verifiedImage(frame.url,frame.sha256);
       images.push({type:'text',text:`Evidence frame ${frame.index}: ${frame.role} at scene frame ${frame.sceneFrame}, source ${frame.sourceStart}.`},{type:'image',data:bytes.toString('base64'),mimeType:'image/jpeg',_meta:{'shutter/role':frame.role,'shutter/frame':frame.index}});
     }
     return {...manifest,__imageBlocks:images};

@@ -11,7 +11,7 @@ export class MemoryRoom {
     root.innerHTML=`<details class="memory-room"><summary>Production Memory <span>Find a moment. Compare a take. Keep your song.</span></summary>
       <p class="small">Local words, source ranges and a visual scout. Search matches your labels, notes, tags and filenames—not automatic subject recognition.</p>
       <div class="memory-columns"><section><div class="memory-bar"><input id="memory-query" type="search" placeholder="Night close-up, red light, chorus…" aria-label="Search production memory"><label class="check"><input id="memory-favorites" type="checkbox">Favorites</label><button id="memory-search" class="secondary">Find moments</button></div><p id="memory-count" class="small">Open a production to begin.</p><div id="memory-results" class="memory-results"></div><button id="memory-more" class="secondary" hidden>More results</button>
-      <details class="memory-author"><summary>Mark a useful source range</summary><button id="memory-new" class="secondary">New moment from selected material</button><p id="memory-source" class="small"></p><div class="memory-range"><label>Source in · seconds<input id="memory-in" value="0" inputmode="decimal"></label><label>Source out · seconds<input id="memory-out" value="3" inputmode="decimal"></label></div><div class="memory-bar"><button id="memory-in-now" class="secondary">In at source playhead</button><button id="memory-out-now" class="secondary">Out at source playhead</button><button id="memory-scout" class="secondary">Scout this range</button></div><label>Name the moment<input id="memory-label" maxlength="160" placeholder="The close-up before the chorus"></label><label>What makes it useful?<textarea id="memory-notes" rows="2" maxlength="2000" placeholder="Your observation, not a machine's guess."></textarea></label><label>Tags · comma separated<input id="memory-tags" placeholder="night, close-up, performance"></label><label class="check"><input id="memory-favorite" type="checkbox">Favorite</label><div class="memory-bar"><button id="memory-save">Save moment</button><button id="memory-discard" class="secondary">Discard form</button></div><p id="memory-form-status" class="small"></p></details><div id="memory-scout-results" class="memory-scout-grid"></div></section>
+      <details class="memory-author"><summary>Mark a useful source range</summary><button id="memory-new" class="secondary">New moment from selected material</button><p id="memory-source" class="small"></p><div class="memory-range"><label>Source in · seconds<input id="memory-in" value="0" inputmode="decimal"></label><label>Source out · seconds<input id="memory-out" value="3" inputmode="decimal"></label></div><div class="memory-bar"><button id="memory-in-now" class="secondary">In at source playhead</button><button id="memory-out-now" class="secondary">Out at source playhead</button><button id="memory-scout" class="secondary">Scout this range</button><button id="memory-inspect" class="secondary">Inspect motion</button></div><label>Name the moment<input id="memory-label" maxlength="160" placeholder="The close-up before the chorus"></label><label>What makes it useful?<textarea id="memory-notes" rows="2" maxlength="2000" placeholder="Your observation, not a machine's guess."></textarea></label><label>Tags · comma separated<input id="memory-tags" placeholder="night, close-up, performance"></label><label class="check"><input id="memory-favorite" type="checkbox">Favorite</label><div class="memory-bar"><button id="memory-save">Save moment</button><button id="memory-discard" class="secondary">Discard form</button></div><p id="memory-form-status" class="small"></p></details><div id="memory-scout-results" class="memory-scout-grid"></div></section>
       <section class="memory-takes"><p class="eyebrow">TAKE STACK</p><label>Shot to compare<select id="memory-shot"></select></label><button id="memory-load-stack" class="secondary">Save cut & load takes</button><p id="memory-stack-status" class="small">Collect a found moment without changing the cut. Audition before choosing.</p><div id="memory-stack"></div><button id="memory-original" class="secondary">End audition · hear/see current cut</button><p class="small">Using a take preserves shot duration, framing, music, sound and text. Too-short marked ranges are not stretched. Audition playback is approximate.</p><button id="memory-export" class="secondary">Export memory notebook JSON</button></section></div></details>`;
     this.$=q=>root.querySelector(q);const bind=(id,fn)=>this.$(id).onclick=()=>this.run(fn);
     this.$('details').addEventListener('toggle',()=>{if(this.$('details').open){this.update();this.search().catch(e=>notify(e.message));}});
@@ -22,8 +22,9 @@ export class MemoryRoom {
     bind('#memory-new',()=>{this.assertForm();this.fill(null,this.getSource());this.$('.memory-author').open=true;});
     bind('#memory-discard',()=>{this.pending=false;this.fill(null,this.getSource());});
     for(const id of ['#memory-in','#memory-out','#memory-label','#memory-notes','#memory-tags','#memory-favorite'])this.$(id).addEventListener('input',()=>{this.pending=true;this.formStatus();});
-    for(const [button,input] of [['#memory-in-now','#memory-in'],['#memory-out-now','#memory-out']])bind(button,()=>{if(this.getSource()!==this.formAsset)throw Error('Select the material attached to this form first.');const t=this.getSourceTime();if(!Number.isFinite(t))throw Error('Choose a playable source first.');this.$(input).value=t.toFixed(6);this.pending=true;this.formStatus();});
-    bind('#memory-save',()=>this.save());bind('#memory-scout',()=>this.scoutRange());bind('#memory-load-stack',()=>this.loadStack(true));
+    for(const [button,input] of [['#memory-in-now','#memory-in'],['#memory-out-now','#memory-out']])bind(button,()=>{if(this.getSource()!==this.formAsset)throw Error('Select the material attached to this form first.');const t=this.getSourceTime();if(!Number.isFinite(t))throw Error('Choose a playable source first.');this.clearInspection();this.$(input).value=t.toFixed(6);this.pending=true;this.formStatus();});
+    bind('#memory-save',()=>this.save());bind('#memory-scout',()=>this.scoutRange());bind('#memory-inspect',()=>this.inspectMotion());bind('#memory-load-stack',()=>this.loadStack(true));
+    for(const id of ['#memory-in','#memory-out'])this.$(id).addEventListener('input',()=>this.clearInspection());
     bind('#memory-original',()=>{this.clearAudition();this.$('#memory-stack-status').textContent='Audition ended. Your authored cut is unchanged.';});
     bind('#memory-export',async()=>{this.assertForm();const data=await api(`/api/media/productions/${this.getProject()}/memory-export`);this.download(JSON.stringify(data,null,2),'shutter-production-memory.json');});
   }
@@ -39,6 +40,7 @@ export class MemoryRoom {
     if(!this.formAsset&&!this.pending)this.fill(null,this.getSource());this.renderStack();
   }
   fill(note,assetId){
+    this.clearInspection();
     this.note=note;this.formAsset=note?.assetId||assetId||null;const asset=this.getState().assets.find(a=>a.id===this.formAsset);
     this.$('#memory-source').textContent=asset?`Attached to ${asset.name}. Saved words are ${note?.evidence==='director-authored'?'director-authored':'artist-authored'}.`:'Select source material, then choose New moment.';
     this.$('#memory-in').value=note?exactTime(note.startUs):'0';this.$('#memory-out').value=note?exactTime(note.endUs):String(Math.min(asset?.media?.duration||3,3));
@@ -92,6 +94,7 @@ export class MemoryRoom {
     });
   }
   async scoutRange(){
+    this.clearInspection();
     const project=this.getProject(),assetId=this.formAsset,startUs=secondsUs(this.$('#memory-in').value),endUs=secondsUs(this.$('#memory-out').value),token=++this.scoutToken;
     if(!assetId)throw Error('Choose source footage first.');this.notify('Scouting the selected range locally. No media leaves this computer.');
     const scout=await this.api(`/api/media/assets/${assetId}/scout`,{method:'POST',body:JSON.stringify({startUs,endUs})});
@@ -99,6 +102,23 @@ export class MemoryRoom {
     this.$('#memory-scout-results').innerHTML=`<p class="small">${scout.sampledRanges} / ${scout.totalRanges} browsing ranges pictured. Scene changes are visual observations, not story labels. Thumbnails are unmanaged-color previews.</p>`+scout.images.map(i=>`<button class="scout-tile secondary" data-range="${i.index}"><img loading="lazy" src="/api/media/scouts/${scout.id}/images/${i.index}" alt="Source sample at ${time(i.timeUs)} seconds"><span>${time(i.startUs)}–${time(i.endUs)}s</span></button>`).join('');
     for(const b of this.root.querySelectorAll('[data-range]'))b.onclick=()=>this.run(()=>{const i=scout.images.find(i=>i.index===Number(b.dataset.range));this.$('#memory-in').value=exactTime(i.startUs);this.$('#memory-out').value=exactTime(i.endUs);this.pending=true;this.formStatus();return this.openSource(assetId,i.startUs/1e6,i.endUs/1e6);});
     this.notify('Scout ready. Choose a range and describe what you actually see.');
+  }
+  clearInspection(){
+    this.scoutToken++;
+    const video=this.$('#memory-motion-preview');if(video){video.pause();this.$('#memory-scout-results').replaceChildren();}
+  }
+  async inspectMotion(){
+    this.clearInspection();
+    const project=this.getProject(),assetId=this.formAsset,startUs=secondsUs(this.$('#memory-in').value),endUs=secondsUs(this.$('#memory-out').value),token=++this.scoutToken;
+    if(!assetId)throw Error('Choose source footage first.');
+    if(endUs-startUs<125000||endUs-startUs>15000000)throw Error('Choose between 0.125 and 15 seconds to inspect motion.');
+    this.notify('Preparing source playback and a sequence of frames locally.');
+    const inspection=await this.api(`/api/media/assets/${assetId}/inspect`,{method:'POST',body:JSON.stringify({startUs,endUs,frameCount:8})});
+    if(token!==this.scoutToken||project!==this.getProject()||assetId!==this.formAsset||startUs!==secondsUs(this.$('#memory-in').value)||endUs!==secondsUs(this.$('#memory-out').value))return;
+    const asSeconds=s=>{const [n,d='1']=s.split('/');return Number(n)/Number(d);};
+    this.$('#memory-scout-results').innerHTML=`<p class="small">Motion inspection · silent playback<br>${inspection.frames.length} samples across ${inspection.preview.durationSeconds.toFixed(3)}s. Up to ${(inspection.sampling.maxGapFrames/24).toFixed(3)}s between samples. Narrow the range for fast action. Source positions follow the 24 fps review clock.</p><video id="memory-motion-preview" class="source-motion-player" controls muted playsinline preload="metadata" src="${esc(inspection.preview.url)}"></video>`+inspection.frames.map(f=>`<button class="scout-tile secondary" data-motion-frame="${f.previewFrame}"><img loading="lazy" src="${esc(f.url)}" alt="Source sample ${f.index+1} at ${asSeconds(f.sourceTime).toFixed(3)} seconds"><span>${f.index+1} · source ${asSeconds(f.sourceTime).toFixed(3)}s</span></button>`).join('');
+    const video=this.$('#memory-motion-preview');for(const b of this.root.querySelectorAll('[data-motion-frame]'))b.onclick=()=>{video.pause();video.currentTime=Number(b.dataset.motionFrame)/24;};
+    this.notify('Motion inspection ready. Play the range or choose a frame. Your note and cut are unchanged.');
   }
   download(text,name){const url=URL.createObjectURL(new Blob([text],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 }
