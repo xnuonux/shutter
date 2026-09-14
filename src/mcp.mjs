@@ -8,6 +8,8 @@ import {ACTION_VERSION,PROPOSAL_SELECTION_SCHEMA,validateSchema} from '../public
 import {directorTools,invokeDirectorTool} from './director-tools.mjs';
 import {SOURCE_INSPECTION_SCHEMA,SOURCE_INSPECTION_OPTIONS} from '../public/source-inspection-contract.mjs';
 import {advanceSource} from '../public/music-edit.mjs';
+import {samplesAtFrame} from '../public/sound-edit.mjs';
+import {SCENE_REVIEW_SCHEMA,SCENE_REVIEW_OPTIONS} from '../public/scene-review-contract.mjs';
 const base = process.env.SHUTTER_URL || "http://127.0.0.1:4677";
 const address = new URL(base);
 if (
@@ -34,6 +36,7 @@ const definitions = [
   ['shutter_apply_actions','Apply the exact previewed Studio batch as one reversible edit. Preserve version, revision, commands, optional proposal and previewHash; add a stable requestKey. Bound proposal context is rechecked atomically. Retry identical input with the same key after an uncertain response; changed input conflicts. Never claims creative continuity approval.',object({...actionInput,previewHash:{type:'string',pattern:'^[a-f0-9]{64}$'},requestKey:id},[...actionRequired,'previewHash','requestKey']),false],
   ['shutter_action_receipt','Read the persisted outcome for a Studio action requestKey. revision is the original applied revision; currentRevision may be later. A missing receipt is not evidence of success.',object({projectId:id,requestKey:id},['projectId','requestKey']),true],
   ['shutter_inspect_cutaway','Inspect a previewed cutaway with up to six local source pictures and saved intent. Preserve the preview input including optional proposal. Compares entry, return and main/alternate views at equal scene time. Returns JPEG images by default; includeImages=false for metadata only. Caches evidence without editing, spending or continuity approval.',object({...actionInput,previewHash:{type:'string',pattern:'^[a-f0-9]{64}$'},coverageId:id,includeImages:{type:'boolean'}},[...actionRequired,'previewHash','coverageId']),false],
+  ['shutter_review_scene','Review a saved composite after editing: picture, coverage, burned titles/captions and authored sound. Read shutter_studio_context for baseRevision and the scene frame clock. startFrame inclusive, endFrame exclusive: 2 or more frames, at most 30 seconds. Returns seekable local playback and 2-12 chronological JPEG samples (default 8); includeImages=false for metadata only. includeAudio=true explicitly returns a mixed MP3 for audio-capable clients; otherwise audio stays in playback. No authored sound means no audio block. Caches review without changing the cut, importing assets or spending credits. Images omit intervening frames; a URL does not mean the client watched the video.',object({projectId:id,...SCENE_REVIEW_OPTIONS,includeImages:{type:'boolean'},includeAudio:{type:'boolean'}},['projectId','baseRevision','startFrame','endFrame']),false],
   ['shutter_get_timeline','Read the same saved scene timeline and exact source ranges as the visual editor. Coverage replaces picture without adding time; audio follows main footage.',object({projectId:id},['projectId']),true],
   ['shutter_save_timeline','Save a reversible edit to the observed timeline revision. Use integer source frames, stable clip IDs and ready takes. Does not generate video or spend credits. Read the timeline again on conflict.',object({projectId:id,baseRevision:{type:'integer',minimum:0},timeline:{type:'object'}},['projectId','baseRevision','timeline']),false],
   [
@@ -105,17 +108,17 @@ const tools = definitions.map(
     annotations: {
       readOnlyHint,
       destructiveHint: false,
-      idempotentHint: readOnlyHint || ['shutter_prepare_shot','shutter_apply_actions','shutter_render_shot','shutter_inspect_cutaway','shutter_inspect_source'].includes(name),
+      idempotentHint: readOnlyHint || ['shutter_prepare_shot','shutter_apply_actions','shutter_render_shot','shutter_inspect_cutaway','shutter_inspect_source','shutter_review_scene'].includes(name),
       openWorldHint: ['shutter_prepare_shot','shutter_render_shot'].includes(name),
     },
   }),
 );
-async function api(route, body, method = "POST") {
+async function api(route, body, method = "POST", timeoutMs=100000) {
   const response = await fetch(base + route, {
     method: body ? method : "GET",
     headers: body ? { "content-type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(100000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || "Shutter request failed");
@@ -125,6 +128,8 @@ function validate(schema, value) {
   return validateSchema(schema,value);
 }
 function recovery(code){
+  if(code==='scene_review_range')return 'Choose 2 or more output frames within the saved production, at most 30 seconds. endFrame is exclusive. Read shutter_studio_context for its frame count and rate.';
+  if(code==='scene_review_context_conflict')return 'Read the current Studio context and saved direction, then request a review of the current revision.';
   if(code==='source_inspection_range')return 'Choose an existing video interval between 0.125 and 15 seconds, within its reported duration. Use integer source microseconds.';
   if(code==='proposal_command_conflict')return 'Use exactly one unchanged command from the selected proposal candidate, or preview an independent edit without a proposal binding.';
   if(code==='direction_revision_conflict')return 'Read shutter_get_direction and rebuild the proposal from its current directionRevision and timelineRevision.';
@@ -134,12 +139,13 @@ function recovery(code){
   if(code==='not_found')return 'Discover current productions and source IDs. A missing receipt is not a successful edit.';
   return 'Read the relevant action schemas and current Studio context; correct the input before retrying.';
 }
-async function verifiedImage(url,sha256){
+async function verifiedImage(url,sha256,max=256*1024,mime='image/jpeg'){
   const response=await fetch(base+url,{redirect:'error',signal:AbortSignal.timeout(100000)});if(!response.ok)throw new Error('evidence_frame_unavailable');
-  if(!/^image\/jpeg$/i.test(response.headers.get('content-type')||''))throw new Error('evidence_frame_invalid');
+  if((response.headers.get('content-type')||'').split(';')[0].trim().toLowerCase()!==mime)throw new Error('evidence_frame_invalid');
   const reader=response.body?.getReader();if(!reader)throw new Error('evidence_frame_invalid');let size=0;const chunks=[];
-  for(;;){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>256*1024){await reader.cancel();throw new Error('evidence_frame_too_large');}chunks.push(Buffer.from(part.value));}
-  const bytes=Buffer.concat(chunks);if(bytes.length<3||bytes[0]!==0xff||bytes[1]!==0xd8||bytes[2]!==0xff)throw new Error('evidence_frame_invalid');
+  for(;;){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>max){await reader.cancel();throw new Error('evidence_frame_too_large');}chunks.push(Buffer.from(part.value));}
+  const bytes=Buffer.concat(chunks);if(mime==='image/jpeg'&&(bytes.length<3||bytes[0]!==0xff||bytes[1]!==0xd8||bytes[2]!==0xff))throw new Error('evidence_frame_invalid');
+  if(mime==='audio/mpeg'&&(bytes.length<3||!(bytes.subarray(0,3).toString()==='ID3'||(bytes[0]===0xff&&(bytes[1]&0xe0)===0xe0))))throw Error('evidence_audio_invalid');
   if(createHash('sha256').update(bytes).digest('hex')!==sha256)throw new Error('evidence_frame_integrity');return bytes;
 }
 async function invoke(name, args) {
@@ -163,6 +169,29 @@ async function invoke(name, args) {
   }
   if(name==='shutter_action_catalog')return api('/api/media/actions'+(args.types?.length?'?types='+encodeURIComponent(args.types.join(',')):''));
   if(name==='shutter_studio_context')return api('/api/media/action-context?'+new URLSearchParams(Object.entries(args).map(([key,value])=>[key,String(value)])));
+  if(name==='shutter_review_scene'){
+    const {projectId,includeImages=true,includeAudio=false,...input}=args;
+    const manifest=await api(`/api/media/productions/${encodeURIComponent(projectId)}/review`,input,'POST',190000),length=input.endFrame-input.startFrame,count=Math.min(input.frameCount??8,length);
+    const validHash=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
+    if(!manifest||manifest.schema!==SCENE_REVIEW_SCHEMA||manifest.projectId!==projectId||manifest.baseRevision!==args.baseRevision||!/^scene_review_[a-f0-9]{64}$/.test(manifest.id)||manifest.startFrame!==args.startFrame||manifest.endFrame!==args.endFrame||length<2||length>3600||!Array.isArray(manifest.frames)||manifest.frames.length!==count||!validHash(manifest.planHash)||!/^\d{1,9}\/\d{1,9}$/.test(manifest.fps))throw Error('scene_review_manifest_invalid');
+    const [n,d]=manifest.fps.split('/').map(Number),fps=n/d;
+    if(!d||fps<1||fps>120||length/fps>30)throw Error('scene_review_manifest_invalid');
+    const prefix=`/api/media/productions/${encodeURIComponent(projectId)}/reviews/${manifest.id}`;
+    const p=manifest.preview;
+    if(p?.url!==prefix+'/preview'||p.frames!==length||p.fps!==manifest.fps||!validHash(p.sha256)||!Number.isInteger(p.width)||!Number.isInteger(p.height)||p.width<2||p.width>1280||p.height<2||p.height>1280||p.width%2||p.height%2||!Number.isFinite(p.durationSeconds)||Math.abs(p.durationSeconds-length/fps)>1e-8||!['mixed','none'].includes(p.audio))throw Error('scene_review_manifest_invalid');
+    for(const [i,frame] of manifest.frames.entries()){
+      const position=Math.floor(i*(length-1)/(count-1));
+      if(frame.index!==i||frame.previewFrame!==position||frame.sceneFrame!==input.startFrame+position||frame.sceneTime!==advanceSource('0',input.startFrame+position,manifest.fps)||frame.previewTime!==advanceSource('0',position,manifest.fps)||frame.url!==`${prefix}/frames/${i}`||!validHash(frame.sha256))throw Error('scene_review_manifest_invalid');
+    }
+    if(p.audio==='mixed'){
+      const a=manifest.audio;
+      if(!a||a.url!==prefix+'/audio'||a.waveUrl!==prefix+'/wave'||!validHash(a.sha256)||!validHash(a.waveSha256)||a.sampleRate!==48000||a.channels!==2||a.startSample!==samplesAtFrame(input.startFrame,manifest.fps)||a.endSample!==samplesAtFrame(input.endFrame,manifest.fps)||a.samples!==a.endSample-a.startSample)throw Error('scene_review_manifest_invalid');
+    }else if(manifest.audio!==undefined)throw Error('scene_review_manifest_invalid');
+    if(!includeImages&& !includeAudio)return manifest;
+    const blocks=[];if(includeImages)for(const frame of manifest.frames){const bytes=await verifiedImage(frame.url,frame.sha256);blocks.push({type:'text',text:`Saved revision ${manifest.baseRevision}, scene frame ${frame.sceneFrame} (${frame.sceneTime} seconds), review frame ${frame.previewFrame}. Intervening frames are omitted.`},{type:'image',data:bytes.toString('base64'),mimeType:'image/jpeg'});}
+    if(includeAudio&&manifest.audio){const a=manifest.audio,bytes=await verifiedImage(a.url,a.sha256,1024*1024,'audio/mpeg');blocks.push({type:'text',text:`Mixed audio for saved revision ${manifest.baseRevision}, scene frames [${manifest.startFrame},${manifest.endFrame}). Codec padding may differ from the exact WAV.`},{type:'audio',data:bytes.toString('base64'),mimeType:'audio/mpeg'});}
+    return {...manifest,__imageBlocks:blocks};
+  }
   if(['shutter_preview_actions','shutter_apply_actions','shutter_action_receipt'].includes(name)){
     const {projectId,...input}=args,route='/api/media/productions/'+encodeURIComponent(projectId)+'/actions/';
     if(name==='shutter_action_receipt')return api(route+'receipts/'+encodeURIComponent(input.requestKey));

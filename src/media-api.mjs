@@ -1,5 +1,6 @@
 import {handleMemoryRequest} from './memory-api.mjs';
 import {inspectSourceRange,readSourceInspectionFile} from './source-inspection.mjs';
+import {reviewScene,readSceneReviewFile} from './scene-review.mjs';
 import {byteRange} from './media-stream.mjs';
 import {inspectCutaway,readCutawayFrame} from './director-evidence.mjs';
 import {actionCatalog,directorContext,previewActions,applyActions,actionReceipt,commandProfiles} from './director-actions.mjs';
@@ -29,6 +30,9 @@ export function createMediaProduction(studio,input) {
 }
 /** Invoke only after the parent server's localhost/Origin/Sec-Fetch-Site gate. */
 export async function handleMediaRequest(studio,req,res,url) {
+  if(req.method==='GET'&&url.pathname==='/scene-review-room.js'){
+    res.writeHead(200,{'content-type':'text/javascript','cache-control':'no-cache'});res.end(await fsp.readFile(path.join(publicRoot,'scene-review-room.js')));return true;
+  }
   const staticFiles={'/direction-room.js':['direction-room.js','text/javascript'],'/direction-room.css':['direction-room.css','text/css'],'/studio-workspace.js':['studio-workspace.js','text/javascript'],'/studio-workspace.css':['studio-workspace.css','text/css'],'/memory-contract.mjs':['memory-contract.mjs','text/javascript'],'/memory-room.js':['memory-room.js','text/javascript'],'/memory-room.css':['memory-room.css','text/css'],'/media-health-room.js':['media-health-room.js','text/javascript'],'/media-health-room.css':['media-health-room.css','text/css'],'/text-edit.mjs':['text-edit.mjs','text/javascript'],'/text-room.js':['text-room.js','text/javascript'],'/text-room.css':['text-room.css','text/css'],'/color-contract.mjs':['color-contract.mjs','text/javascript'],'/color-room.js':['color-room.js','text/javascript'],'/color-room.css':['color-room.css','text/css'],'/delivery-contract.mjs':['delivery-contract.mjs','text/javascript'],'/delivery-room.js':['delivery-room.js','text/javascript'],'/delivery-room.css':['delivery-room.css','text/css'],'/sound-edit.mjs':['sound-edit.mjs','text/javascript'],'/sound-room.js':['sound-room.js','text/javascript'],'/sound-room.css':['sound-room.css','text/css'],'/music-edit.mjs':['music-edit.mjs','text/javascript'],'/music-room.js':['music-room.js','text/javascript'],'/music-room.css':['music-room.css','text/css'],'/edit-recovery.mjs':['edit-recovery.mjs','text/javascript'],'/media-studio':['media-studio.html','text/html'],'/media-studio.js':['media-studio.js','text/javascript'],'/media-studio.css':['media-studio.css','text/css']};
   if(req.method==='GET'&&staticFiles[url.pathname]) {
     const [name,type]=staticFiles[url.pathname];res.writeHead(200,{'content-type':type,'cache-control':'no-cache'});res.end(await fsp.readFile(path.join(publicRoot,name)));return true;
@@ -40,6 +44,20 @@ export async function handleMediaRequest(studio,req,res,url) {
   if(await handleMemoryRequest(studio,req,res,url))return true;
   const parts=url.pathname.split('/').filter(Boolean);
   try {
+    if(req.method==='POST'&&parts.length===5&&parts[2]==='productions'&&parts[4]==='review'){
+      const input=await body(req),abort=new AbortController(),cancel=()=>{if(!res.writableEnded)abort.abort();};res.once('close',cancel);if(res.destroyed)abort.abort();
+      try{const result=await mediaExclusive(studio,()=>reviewScene(studio,parts[3],input,{signal:abort.signal}));if(!res.destroyed)json(res,200,result);}
+      finally{res.removeListener('close',cancel);}return true;
+    }
+    if(['GET','HEAD'].includes(req.method)&&parts[2]==='productions'&&parts[4]==='reviews'&&((parts.length===7&&['preview','audio','wave'].includes(parts[6]))||(parts.length===8&&parts[6]==='frames'))){
+      if(parts[6]==='frames'&&!/^(?:[0-9]|1[01])$/.test(parts[7]))throw Error('not_found');
+      const item=parts[6]==='frames'?Number(parts[7]):parts[6],bytes=await readSceneReviewFile(studio,parts[3],parts[5],item),stream=typeof item==='string';
+      const range=byteRange(stream&&req.method==='GET'&&!req.headers['if-range']?req.headers.range:undefined,bytes.length);
+      const headers={'content-type':({preview:'video/mp4',audio:'audio/mpeg',wave:'audio/wav'})[item]||'image/jpeg','cache-control':'no-store','x-content-type-options':'nosniff',...(stream?{'accept-ranges':'bytes'}:{})};
+      if(range.status===416){res.writeHead(416,{...headers,'content-range':`bytes */${bytes.length}`,'content-length':0});res.end();return true;}
+      res.writeHead(range.status,{...headers,'content-length':range.end-range.start+1,...(range.status===206?{'content-range':`bytes ${range.start}-${range.end}/${bytes.length}`}:{})});
+      res.end(req.method==='HEAD'?undefined:bytes.subarray(range.start,range.end+1));return true;
+    }
     if(req.method==='POST'&&parts.length===5&&parts[2]==='assets'&&parts[4]==='inspect'){
       const input=await body(req),abort=new AbortController(),cancel=()=>{if(!res.writableEnded)abort.abort();};res.once('close',cancel);if(res.destroyed)abort.abort();
       try{const result=await mediaExclusive(studio,()=>inspectSourceRange(studio,parts[3],input,{signal:abort.signal}));if(!res.destroyed)json(res,200,result);}

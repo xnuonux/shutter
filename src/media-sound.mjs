@@ -5,6 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import {normalizeSoundStage, soundAudibility, envelopeAt, gainForDb, soundIdentity, SAMPLE_RATE, SOUND_POLICY} from '../public/sound-edit.mjs';
 import {getMediaProfile, verifyMediaAsset, runMedia, decoderArgs, importMediaFile, fileDigest} from './media-io.mjs';
+import {inspectProcess} from './media-inspect.mjs';
 const BLOCK = 4096, BYTES_PER_FRAME = 8;
 
 export function compileSoundStage(studio, edit, sources, warnings, audioSamples) {
@@ -64,7 +65,7 @@ function floatBuffer(values) {
   }
   return buffer;
 }
-async function decode(studio, source, target, count, pad=false) {
+async function decode(studio, source, target, count, pad=false, signal) {
   const profile=getMediaProfile(studio,source.assetId), stream=profile.audio.find(a=>a.index===source.streamIndex);
   if(!stream)throw Error('sound_stream_required');
   const start=source.sourceInSample || 0;
@@ -73,24 +74,28 @@ async function decode(studio, source, target, count, pad=false) {
   // Explicit dual-mono, rather than an implicit -3 dB mono-to-stereo pan law.
   filters.push(stream.channels===1?'pan=stereo|c0=c0|c1=c0':'aformat=channel_layouts=stereo');
   if(pad)filters.push(`apad=whole_len=${count}`,`atrim=end_sample=${count}`);
-  await runMedia('ffmpeg',['-v','error','-nostdin',...decoderArgs,'-i',studio.assetPath(source.assetId),
+  await inspectProcess('ffmpeg',['-v','error','-nostdin',...decoderArgs,'-i',studio.assetPath(source.assetId),
     '-map',`0:${source.streamIndex}`,'-vn','-af',filters.join(','),'-ar','48000','-ac','2',
-    '-c:a','pcm_f32le','-f','f32le',target],{timeoutMs:900000});
+    '-c:a','pcm_f32le','-f','f32le',target],{timeoutMs:900000,signal});
   if((await fs.stat(target)).size!==count*BYTES_PER_FRAME)throw Error('sound_decoded_range');
 }
-async function wrapWave(raw, wave, samples, floating=false) {
-  await runMedia('ffmpeg',['-v','error','-nostdin','-f','f32le','-ar','48000','-ac','2','-i',raw,
-    '-c:a',floating?'pcm_f32le':'pcm_s24le','-rf64','auto','-map_metadata','-1',wave],{timeoutMs:900000});
-  const info=JSON.parse(await runMedia('ffprobe',['-v','error','-show_streams','-of','json',wave])).streams?.[0];
+async function wrapWave(raw, wave, samples, floating=false, signal) {
+  await inspectProcess('ffmpeg',['-v','error','-nostdin','-f','f32le','-ar','48000','-ac','2','-i',raw,
+    '-c:a',floating?'pcm_f32le':'pcm_s24le','-rf64','auto','-map_metadata','-1',wave],{timeoutMs:900000,signal});
+  const {stdout}=await inspectProcess('ffprobe',['-v','error','-show_streams','-of','json',wave],{timeoutMs:10000,signal});
+  const info=JSON.parse(stdout).streams?.[0];
   if(info?.sample_rate!=='48000'||info.channels!==2||info.duration_ts!==samples||info.time_base!=='1/48000')throw Error('render_audio_contract');
 }
 /** Caller supplies an isolated directory and a validated immutable plan. Cleanup is
  * exception-safe; user source assets are only read. Stems are post-track-gain/fade,
  * pre-mute/solo/output gain, aligned at timeline zero, in 32-bit float WAV. */
-export async function renderSoundStage(studio, plan, folder, {stems=true}={}) {
+async function renderSoundStageInternal(studio, plan, folder, {stems=true,startSample=0,endSample=plan.audioSamples,signal}={}) {
+  if(signal?.aborted)throw Error('sound_render_cancelled');
   const stage=normalizeSoundStage(plan.soundStage);
   if(!stage||!Number.isSafeInteger(plan.audioSamples)||plan.audioSamples<1)throw Error('sound_empty');
-  const estimatedWorkBytes=checkSoundBudget(plan,{stems});
+  if(!Number.isSafeInteger(startSample)||!Number.isSafeInteger(endSample)||startSample<0||endSample<=startSample||endSample>plan.audioSamples)throw Error('sound_interval_range');
+  const intervalSamples=endSample-startSample;
+  const estimatedWorkBytes=checkSoundBudget({...plan,audioSamples:intervalSamples,soundStage:{...stage,tracks:stage.tracks.map(t=>({...t,clips:t.clips.flatMap(c=>{const a=Math.max(startSample,c.atSample),b=Math.min(endSample,c.atSample+c.samples);return b>a?[{...c,atSample:a-startSample,samples:b-a}]:[];})}))}},{stems});
   const temp=await fs.mkdtemp(path.join(folder,'sound-work-'));
   const readers=[],handles=[],made=[];let finished=false;
   try {
@@ -99,27 +104,28 @@ export async function renderSoundStage(studio, plan, folder, {stems=true}={}) {
       raw:path.join(temp,`stem-${i}.raw`),name:`stem-${String(i+1).padStart(2,'0')}-48k-f32.wav`}));
     if(plan.soundtrack) {
       const raw=path.join(temp,'master.raw');
-      await decode(studio,{assetId:plan.soundtrack.assetId,streamIndex:plan.soundtrack.sourceStream},raw,plan.audioSamples,true);
+      await decode(studio,{assetId:plan.soundtrack.assetId,streamIndex:plan.soundtrack.sourceStream,sourceInSample:(plan.soundtrack.sourceInSample||0)+startSample},raw,intervalSamples,true,signal);
       const handle=await fs.open(raw,'r');handles.push(handle);
-      readers.push({handle,master:true,at:0,count:plan.audioSamples});
-      if(stems){const name='master-48k.wav';await wrapWave(raw,path.join(folder,name),plan.audioSamples);made.push(name);}
+      readers.push({handle,master:true,at:startSample,count:intervalSamples});
+      if(stems){const name='master-48k.wav';await wrapWave(raw,path.join(folder,name),intervalSamples,false,signal);made.push(name);}
     }
     let serial=0;
     for(const bus of buses) {
       if(stems){bus.writer=await fs.open(bus.raw,'wx');handles.push(bus.writer);}
       for(const clip of bus.clips) {
-        const count=Math.max(0,Math.min(clip.samples,plan.audioSamples-clip.atSample));
+        const overlapStart=Math.max(startSample,clip.atSample),overlapEnd=Math.min(endSample,clip.atSample+clip.samples),count=Math.max(0,overlapEnd-overlapStart);
         if(!count)continue;
         const raw=path.join(temp,`source-${serial++}.raw`);
-        await decode(studio,clip,raw,count);
+        await decode(studio,{...clip,sourceInSample:(clip.sourceInSample||0)+(overlapStart-clip.atSample)},raw,count,false,signal);
         const handle=await fs.open(raw,'r');handles.push(handle);
-        readers.push({handle,bus,clip,at:clip.atSample,count,gain:gainForDb(bus.gainDb+clip.gainDb)});
+        readers.push({handle,bus,clip,at:overlapStart,count,gain:gainForDb(bus.gainDb+clip.gainDb)});
       }
     }
     const mixRaw=path.join(temp,'mix.raw'),mixWriter=await fs.open(mixRaw,'wx');handles.push(mixWriter);
     const outputGain=gainForDb(stage.outputGainDb),peak=[0,0];let overloadSamples=0;
-    for(let start=0;start<plan.audioSamples;start+=BLOCK) {
-      const count=Math.min(BLOCK,plan.audioSamples-start), mix=new Float64Array(count*2);
+    for(let start=startSample;start<endSample;start+=BLOCK) {
+      if(signal?.aborted)throw Error('sound_render_cancelled');
+      const count=Math.min(BLOCK,endSample-start), mix=new Float64Array(count*2);
       const buffers=new Map(buses.map(b=>[b.id,new Float64Array(count*2)]));
       for(const reader of readers) {
         const from=Math.max(start,reader.at),to=Math.min(start+count,reader.at+reader.count);
@@ -128,7 +134,7 @@ export async function renderSoundStage(studio, plan, folder, {stems=true}={}) {
         await readExact(reader.handle,data,(from-reader.at)*BYTES_PER_FRAME);
         const target=reader.master?mix:buffers.get(reader.bus.id);
         for(let frame=from;frame<to;frame++) {
-          const gain=reader.master?(audible.master?1:0):reader.gain*envelopeAt(reader.clip,frame-reader.at);
+            const gain=reader.master?(audible.master?1:0):reader.gain*envelopeAt(reader.clip,frame-reader.clip.atSample);
           for(let c=0;c<2;c++) {
             const value=data.readFloatLE((frame-from)*8+c*4);
             if(!Number.isFinite(value))throw Error('sound_nonfinite');
@@ -150,15 +156,15 @@ export async function renderSoundStage(studio, plan, folder, {stems=true}={}) {
       await writeAll(mixWriter,floatBuffer(mix));
     }
     for(const h of handles)await h.close();handles.length=0;
-    const report={schema:'shutter-sound-report-v1',samples:plan.audioSamples,sampleRate:SAMPLE_RATE,channels:2,
+    const report={schema:'shutter-sound-report-v1',samples:intervalSamples,...(startSample||endSample!==plan.audioSamples?{originSample:startSample}:{}),sampleRate:SAMPLE_RATE,channels:2,
       samplePeak:peak,samplePeakDbfs:peak.map(p=>p?20*Math.log10(p):null),overloadSamples,
       suggestedOutputGainDb:overloadSamples?Math.max(-60,Math.floor((stage.outputGainDb-20*Math.log10(Math.max(...peak))-1)*10)/10):null,
       metering:'sample-peak only; not true-peak or LUFS',estimatedWorkBytes,normalization:false,limiter:false,outputGainDb:stage.outputGainDb,
       audibility:audible,monoMapping:'dual-mono at unity',stemPolicy:'post-track-gain/fades, pre-mute/solo/output-gain; aligned 32-bit float'};
     if(overloadSamples) {const e=Error('sound_mix_clipping');e.publicDetails=report;throw e;}
-    const mixName='mix-48k.wav';await wrapWave(mixRaw,path.join(folder,mixName),plan.audioSamples);made.push(mixName);
-    if(stems)for(const bus of buses){await wrapWave(bus.raw,path.join(folder,bus.name),plan.audioSamples,true);made.push(bus.name);}
-    const files=[];for(const name of made)files.push({name,sha256:await fileDigest(path.join(folder,name)),samples:plan.audioSamples});
+    const mixName='mix-48k.wav';await wrapWave(mixRaw,path.join(folder,mixName),intervalSamples,false,signal);made.push(mixName);
+    if(stems)for(const bus of buses){await wrapWave(bus.raw,path.join(folder,bus.name),intervalSamples,true,signal);made.push(bus.name);}
+    const files=[];for(const name of made)files.push({name,sha256:await fileDigest(path.join(folder,name)),samples:intervalSamples});
     const manifest={report,identity:plan.soundIdentity,tracks:buses.map(b=>({id:b.id,name:b.name,role:b.role,label:stage.tracks.find(t=>t.id===b.id).name,audible:b.audible})),files};
     const reportName='sound-report.json';await fs.writeFile(path.join(folder,reportName),JSON.stringify(manifest,null,2)+'\n');made.push(reportName);
     finished=true;return {mixName,report,files,bridgeFiles:made};
@@ -167,6 +173,8 @@ export async function renderSoundStage(studio, plan, folder, {stems=true}={}) {
     if(!finished)await Promise.allSettled(made.map(name=>fs.rm(path.join(folder,name),{force:true})));
   }
 }
+export async function renderSoundStage(studio, plan, folder, options={}) { return renderSoundStageInternal(studio,plan,folder,{...options,startSample:0,endSample:plan.audioSamples,stems:options.stems??true}); }
+export async function renderSoundStageInterval(studio, plan, folder, options={}) { if(!Number.isSafeInteger(options.startSample)||!Number.isSafeInteger(options.endSample))throw Error('sound_interval_range'); return renderSoundStageInternal(studio,plan,folder,{startSample:options.startSample,endSample:options.endSample,signal:options.signal,stems:false}); }
 /** Saved-revision listening mix, separate from picture rendering. Never claim an
  * older mix represents an altered draft; browser matching uses canonical identity. */
 export async function renderListeningMix(studio,projectId,{baseRevision}={}) {

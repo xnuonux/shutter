@@ -6,7 +6,7 @@ import os from 'node:os';
 import {Studio} from '../src/store.mjs';
 import {runMedia,importMediaFile,fileDigest,getMediaProfile} from '../src/media-io.mjs';
 import {emptyMediaEdit,compileMediaEdit,renderMediaEdit,makeBridgeXml,makeBridgeOtio} from '../src/media-edit.mjs';
-import {renderSoundStage,renderListeningMix,checkSoundBudget} from '../src/media-sound.mjs';
+import {renderSoundStage,renderSoundStageInterval,renderListeningMix,checkSoundBudget} from '../src/media-sound.mjs';
 import {emptySoundStage,SOUND_POLICY,soundIdentity} from '../public/sound-edit.mjs';
 import {pcm24,fixturePng} from './helpers/sound-fixtures.mjs';
 let root,studio,image,master,effect,mono,camera,rate441,hashes,serial=0;
@@ -42,6 +42,18 @@ test('decoded mix matches an independent per-sample arithmetic oracle across 240
  }
  assert.ok(maximum<=2/8388608,'PCM quantization error '+maximum);
  assert.ok(actual.slice(16000*2).every(v=>v===0));assert.equal(result.report.normalization,false);assert.equal(result.report.limiter,false);
+});
+test('interval render matches the full mix through fades, source offsets, master padding, solo and gain',async()=>{
+ const e=edit(),{record,folder:fullFolder,result:full}=await sound(e),intervalFolder=await fs.mkdtemp(path.join(root,'interval-'));
+ const interval=await renderSoundStageInterval(studio,record.plan,intervalFolder,{startSample:100,endSample:16200});
+ const whole=await decoded(path.join(fullFolder,full.mixName)),part=await decoded(path.join(intervalFolder,interval.mixName));
+ assert.equal(interval.report.originSample,100);assert.equal(interval.report.samples,16100);assert.equal(interval.files[0].samples,16100);assert.equal(full.report.originSample,undefined);assert.deepEqual(part,whole.slice(100*2,16200*2));
+ const solo=structuredClone(record.plan);solo.soundStage.tracks[0].solo=true;solo.soundStage.outputGainDb=-9;
+ const soloFolder=await fs.mkdtemp(path.join(root,'interval-solo-'));const soloResult=await renderSoundStageInterval(studio,solo,soloFolder,{startSample:15900,endSample:16200});
+ const soloSamples=await decoded(path.join(soloFolder,soloResult.mixName)),fullSoloFolder=await fs.mkdtemp(path.join(root,'full-solo-'));const fullSolo=await renderSoundStage(studio,solo,fullSoloFolder);const fullSoloSamples=await decoded(path.join(fullSoloFolder,fullSolo.mixName));
+ assert.deepEqual(soloSamples,fullSoloSamples.slice(15900*2,16200*2));
+ for(const range of [{},{startSample:0},{endSample:100},{startSample:0,endSample:0},{startSample:5,endSample:4},{startSample:-1,endSample:4},{startSample:0,endSample:record.plan.audioSamples+1}])await assert.rejects(()=>renderSoundStageInterval(studio,record.plan,intervalFolder,range),/sound_interval_range/);
+ const aborted=new AbortController();aborted.abort();await assert.rejects(()=>renderSoundStageInterval(studio,record.plan,intervalFolder,{startSample:0,endSample:100,signal:aborted.signal}),/sound_render_cancelled|AbortError/);
 });
 test('stems are aligned and master source prefix remains bit-identical',async()=>{
  const {folder,result}=await sound();const original=await decoded(studio.assetPath(master.id)),aligned=await decoded(path.join(folder,'master-48k.wav'));
