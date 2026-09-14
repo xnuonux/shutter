@@ -127,3 +127,15 @@ The bridge does not grant generation, spending, uploading, publication or hosted
 ## Verified evidence
 
 The production tests exercise real HTTP and stdio callers, SQLite state, imported media metadata, exact cutaway return, mixed sound/text batches, invalid input, stale preview, retry replay, undo/redo and receipt-write rollback. See [the implementation result](director-actions-2026-09-13.md) for the final counts, local integration and preservation evidence.
+
+## Review the composed result
+
+After applying an edit, read the current saved timeline revision and call **shutter_review_scene** with projectId, baseRevision, startFrame and endFrame. The interval uses the scene's output frames, end exclusive; request 2 or more frames and no more than 30 seconds. frameCount accepts 2-12, default 8. This reviews the actual composed picture, visible coverage, burned titles/captions and authored sound using existing local assets. It creates a bounded cache, without editing, importing a cut or spending generation credits.
+
+The response binds the review to project, revision, plan hash, frame range, source selections and saved scene intent. Inspect its ordered image blocks and sampling gaps. Use includeImages:false for metadata only. Playback contains authored sound; an audio-capable client may set includeAudio:true to receive the verified mixed MP3 as an audio block. No authored sound means no audio block. The linked WAV preserves the exact global sample interval; compressed playback can have codec padding.
+
+A local playback URL alone is not proof that a model watched a video or heard its sound. Describe only the content actually perceived. Sampled images do not certify motion or character continuity. Narrow the review range around a disputed cut or action; use artist judgment where the available modality leaves a gap.
+
+On revision_conflict or scene_review_context_conflict, read current context and request the intended current revision again. On scene_review_range, check saved length and frame rate before choosing new bounds. Identical requests reuse verified cached files. Historical files remain labeled with their original revision; do not treat them as the current cut after later edits.
+
+The artist uses **Review scene → Review saved range** below Program. Local draft/range/project changes withdraw the old preview; apply pending text/direction changes and save before reviewing. There are now 13 Studio/workflow MCP tools plus legacy production tools. See [saved scene review](scene-review-2026-09-14.md) for implementation and verification evidence.
