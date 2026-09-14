@@ -139,3 +139,11 @@ A local playback URL alone is not proof that a model watched a video or heard it
 On revision_conflict or scene_review_context_conflict, read current context and request the intended current revision again. On scene_review_range, check saved length and frame rate before choosing new bounds. Identical requests reuse verified cached files. Historical files remain labeled with their original revision; do not treat them as the current cut after later edits.
 
 The artist uses **Review scene → Review saved range** below Program. Local draft/range/project changes withdraw the old preview; apply pending text/direction changes and save before reviewing. There are now 13 Studio/workflow MCP tools plus legacy production tools. See [saved scene review](scene-review-2026-09-14.md) for implementation and verification evidence.
+
+## Worked director exercise
+
+[The orb handoff exercise](director-exercise-2026-09-14.md) demonstrates the complete observe → direct → preview/evidence → apply → review → revise path on existing footage. The first cutaway returned before Sol's gaze lowered; a new preview/apply moved it nine frames later while preserving the underlying scene clock. The resulting 13.5-second working cut has real receipts and a saved explanation, not a continuity certificate.
+
+Compare object ownership, hand position, eyeline and action phase at both coverage boundaries. Material from another take can cover a compatible held state without being synchronized footage; record that distinction in the source note. Never claim a model watched native video or heard sound merely because the bridge returned URLs or media blocks. If a modality is unavailable, retain the media for artist review and state the unresolved judgment.
+
+Start new work from current project IDs, timeline and direction revisions. The worked requests are evidence and examples, not a batch to replay against the user's project. Creation/import remain existing app API operations until those bridge fundamentals are implemented.

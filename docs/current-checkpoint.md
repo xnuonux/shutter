@@ -1,6 +1,16 @@
-# Current checkpoint: review the composed scene
+# Current checkpoint: a director has edited and revised a real scene
 
 September 14, 2026. Source code **2f69cf9** is verified and integrated locally. Start with [the scene review result](scene-review-2026-09-14.md) and [Director calling guide](director-action-guide.md). Canonical repo: C:/dev/shutter, branch codex/shared-scene-timeline. Retained integration worktree: C:/dev/.worktrees/shutter-integration-20260912, branch codex/shutter-integration-20260912.
+
+## Latest director exercise
+
+The [orb handoff exercise](director-exercise-2026-09-14.md) is complete. Codex inspected existing H3 footage through real MCP source-image responses, saved observed moments and direction, applied a bound cutaway, reviewed the composed result, then moved coverage nine frames later to correct the observed gaze at its return. The resulting working cut is **13.5 seconds, 324 frames at 24 fps, 832 × 480**, with aligned original take audio. No generation or paid calls occurred.
+
+Review production **prod_61bf252d-9459-4354-b723-fc11a714fb36**, title **A burden shared · director working cut**, saved revision **6**, is on localhost4688. Main lengths are 96, 104 and 124 frames. Wide coverage [197,224) covers the render join at 200 and returns at source frame 24 of placement, with no timeline extension or restart. Five actual apply receipts retain revisions 2-6. Four source notes and revised direction retain observations and their limits. Earlier examples remain preserved.
+
+The final review MP4 is preserved as through-the-handoff.mp4 in task outputs/shutter/director-exercise-2026-09-14/. Actual state/media assertions and five browser checks pass. A guidance-only catalog change now explicitly directs agents to review and revise after apply; thirteen existing HTTP/MCP action tests passed. No media/edit engine change required a repeated full suite. Canonical original 78 records/19 requests remain unchanged.
+
+This was an inline model choice using actual sampled images, not a second external client certification or complete native-video perception. The client cannot hear audio; sound decoding/alignment is verified, listening quality is not. The unused wide is compatible held-state material from another take, not a synchronized camera. Artist judgment of motion, pacing and sound remains open.
 
 ## Current capability
 
@@ -36,10 +46,10 @@ Runtime helpers remain work/env.ps1, work/serve.mjs, work/test-python and work/a
 
 A review URL does not mean an AI watched its video or heard its audio. JPEG samples omit intervening frames; optional audio requires a capable client. Playback uses unmanaged SDR and lossy codecs; the WAV retains the exact sample interval. Sidecar-only captions follow delivery policy and are not burned. These are mechanical review capabilities, not semantic character/continuity approval or episode certification. No external LLM director session is certified. Pixel orchestration, synchronized camera generation and composition-wide color management remain incomplete.
 
-Next bounded milestone: exercise one complete director loop on existing footage, using observed source evidence and saved intent to choose an edit, apply it, review the resulting composed scene, and revise or undo it. Establish the useful creative outcome and limits before expanding autonomous orchestration or provider setup. The tools now support that loop; the scripted transport tests do not establish an AI's creative judgment.
+Next bounded milestone: complete the missing Studio setup operations in the director bridge. This exercise needed existing app HTTP APIs to create its production and import the three source files before MCP could take over. Define and implement discoverable creation/import contracts, preserving current local file and spending boundaries. Keep provider setup deferred. The composed review and revision loop has now been exercised on real footage; creative quality and unsupported modalities remain explicitly qualified.
 
 ## Prior decisions and evidence
 
 The [approved vision](../VISION.md), [shared scene timing rule](scene-time-and-coverage.md), [source inspection result](source-inspection-2026-09-13.md), [proposal binding](proposal-binding-2026-09-13.md), [director workflow](director-workflow-2026-09-13.md), [cutaway evidence](director-evidence-2026-09-13.md) and [takeover integration](takeover-integration-2026-09-12.md) retain earlier decisions. Main-view time continues beneath alternate coverage; returning to it resumes elapsed scene time and never restarts a paid render.
 
-Latest durable task evidence: outputs/shutter/scene-review-2026-09-14/ under task 01a087ae-15fc-7e43-8eb2-126e7883d103. Prior research and raw receipts remain in their dated folders; keep them cold unless a specific question requires them.
+Latest durable task evidence: outputs/shutter/director-exercise-2026-09-14/; prior implementation evidence is outputs/shutter/scene-review-2026-09-14/ under task 01a087ae-15fc-7e43-8eb2-126e7883d103. Prior research and raw receipts remain in their dated folders; keep them cold unless a specific question requires them.
