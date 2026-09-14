@@ -1,6 +1,6 @@
 # Current checkpoint: a director has edited and revised a real scene
 
-September 14, 2026. Source code **2f69cf9** is verified and integrated locally. Start with [the scene review result](scene-review-2026-09-14.md) and [Director calling guide](director-action-guide.md). Canonical repo: C:/dev/shutter, branch codex/shared-scene-timeline. Retained integration worktree: C:/dev/.worktrees/shutter-integration-20260912, branch codex/shutter-integration-20260912.
+September 14, 2026. Scene-review engine **2f69cf9** and director exercise/guidance **6d1e858** are verified and integrated locally. Start with [the scene review result](scene-review-2026-09-14.md) and [Director calling guide](director-action-guide.md). Canonical repo: C:/dev/shutter, branch codex/shared-scene-timeline. Retained integration worktree: C:/dev/.worktrees/shutter-integration-20260912, branch codex/shutter-integration-20260912.
 
 ## Latest director exercise
 
@@ -24,7 +24,7 @@ There are now **31 deterministic editing actions and 13 Studio/workflow MCP tool
 
 Original Direct/Canvas/Moment, Material/Program/Timeline, Generate, Takes, Moments, Sound, Finish, Deliver and recovery remain available. Preserve original Lunari, Moment and Blender work.
 
-## Verification and runtime
+## Prior engine verification and current runtime
 
 - Full suite: **534 tests, 532 passed, zero failed, two existing Windows symlink skips**, about 32 seconds.
 - Four new actual FFmpeg/HTTP/MCP tests compare interval picture with full export, verify exact title-frame presence and compare the WAV sample-for-sample. They cover visible coverage/source phase, stills, fractional rates, separately rounded audio boundaries, large-picture downscaling, silent scenes, master-only audio, range limits, byte-range seeking, cache/source corruption, context changes and cancellation.
@@ -34,7 +34,7 @@ Original Direct/Canvas/Moment, Material/Program/Timeline, Generate, Takes, Momen
 - Independent current-source review found no concrete issue in interval picture/audio, provider-write boundaries or UI freshness. It performed syntax/diff checks; actual media and browser evidence above came from the parent run.
 - Canonical originals remain **78 records and 19 request entries**, unchanged raw ordered {rows,requests} SHA-256: 7d9b4326b5dd79bf02451228aecda069af83cf9227b5a326728d34da43013663.
 
-Canonical app: http://127.0.0.1:4677, PID35656 at verification. Its catalog discovers scene review and malformed review input is rejected before work. Review app: http://127.0.0.1:4688, PID31224. Recheck ownership before restarting either process.
+Canonical app: http://127.0.0.1:4677, PID26412 at verification. Its catalog discovers scene review and malformed review input is rejected before work. Review app: http://127.0.0.1:4688, PID43200. Recheck ownership before restarting either process.
 
 The successful disposable review production is **prod_16d54af0-8619-4b89-8542-c704aede5bcd**, titled "The rain · composed scene review". It preserves a four-second saved main timeline with an alternate view from frames 36-60, a title at 40-60 and an existing timing master. The tested review spans [24,84), 2.5 seconds. Earlier review fixtures remain preserved. The browser script ends with the original saved draft restored and a ready cached review; a fresh browser tab must open Review scene and request its range.
 
