@@ -1,5 +1,7 @@
 # Current checkpoint: a director has edited and revised a real scene
 
+**September 22 publication handoff:** start with [Codex's handoff to the next agent](../HANDOFF.md). Implementation remains at the September 14 milestone below; this handoff adds documentation only. Fresh full-suite verification: 534 tests, 532 passed, zero failed, two file-symlink skips due to unavailable Windows privilege. The original journal still has 78 records/19 requests and the same digest. No listeners on ports 4677/4688 were present at handoff, so historical PIDs below are stale. Media, app data and raw evidence remain local and are not included in GitHub.
+
 September 14, 2026. Scene-review engine **2f69cf9** and director exercise/guidance **6d1e858** are verified and integrated locally. Start with [the scene review result](scene-review-2026-09-14.md) and [Director calling guide](director-action-guide.md). Canonical repo: C:/dev/shutter, branch codex/shared-scene-timeline. Retained integration worktree: C:/dev/.worktrees/shutter-integration-20260912, branch codex/shutter-integration-20260912.
 
 ## Latest director exercise

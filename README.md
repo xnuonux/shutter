@@ -6,7 +6,9 @@
 
 The implementation checkpoint and historical prototype notes below remain distinct from that long-term ambition.
 
-## Current implementation · September 12, 2026
+## Current implementation · September 22, 2026
+
+**Continuing this project? Start with [Codex's agent handoff](HANDOFF.md).** It records the completed milestones, fresh verification, local-only media/evidence, budget boundaries and the next MCP setup milestone. The latest real director exercise produced a 13.5-second cut through the inspect/edit/review/revise loop; see [the case](docs/director-exercise-2026-09-14.md).
 
 Start with [the current checkpoint](docs/current-checkpoint.md) and [the integration evidence](docs/takeover-integration-2026-09-12.md). The asset-backed Studio at `/media-studio` accepts camera footage, generated video, photographs and mastered audio. It includes editing, sound lanes, finishing text, media recovery, authored Production Memory, Take Stacks and governed H3 Generative Inserts. Direct, Canvas, Moment and the earlier scene timeline remain available.
 
